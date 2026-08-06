@@ -4,7 +4,4 @@ out/
 .env
 *.log
 .git/
-Dockerfile
-docker-compose.yml
-.dockerignore
-README.md
+tsconfig.tsbuildinfo

@@ -1,0 +1,212 @@
+# Expedientes Jurídicos
+
+Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judiciales y cargar registros nuevos, ya sea de forma manual o por importación de archivos CSV.
+
+## Características
+
+- **Consulta** de la vista `dbo.google` con filtros (centro judicial, unidad judicial, expediente, actor, demandado, estado y búsqueda general) y paginación.
+- **Detalle** de expediente con la historia completa (campo XML `Historia`).
+- **Alta manual** de registros nuevos.
+- **Importación CSV** por arrastrar-y-soltar con plantilla descargable.
+- **Login simple** con usuarios propios (JWT en cookie httpOnly).
+- **Vista de solo lectura**: los registros nuevos se guardan en una tabla propia (`dbo.app_expedientes`), nunca se escribe sobre la vista.
+
+## Stack
+
+- Next.js 14 (App Router, API routes)
+- TypeScript
+- Driver `mssql` v11 (tedious, JS puro — funciona en contenedores Alpine sin dependencias nativas)
+- `jsonwebtoken` + `bcryptjs` para autenticación
+- `csv-parse` para importación de CSV
+
+## Requisitos
+
+- SQL Server accesible por TCP (por defecto puerto **1433**) con la vista `dbo.google`.
+- La base de datos por defecto se llama `LegajoExpdtes`.
+
+> ⚠️ **Importante:** el servidor SQL debe tener el protocolo **TCP/IP habilitado** y el puerto 1433 abierto (SQL Server Configuration Manager → Protocols → TCP/IP → Enabled, y el puerto en `IPALL`). Sin eso la app no puede conectarse.
+
+## Desarrollo local
+
+### 1. Variables de entorno
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Descripción | Default |
+|---|---|---|
+| `MSSQL_HOST` | IP o hostname del SQL Server | `192.168.35.222` |
+| `MSSQL_PORT` | Puerto TCP de SQL Server | `1433` |
+| `MSSQL_USER` | Usuario SQL | `sa` |
+| `MSSQL_PASSWORD` | Contraseña SQL | — |
+| `MSSQL_DATABASE` | Base de datos | `LegajoExpdtes` |
+| `JWT_SECRET` | Secreto para firmar tokens (cambiarlo en producción) | — |
+| `JWT_EXPIRES` | Vigencia del token | `7d` |
+| `APP_URL` | URL pública de la app | `http://localhost:3000` |
+
+### 2. Instalar y correr
+
+```bash
+npm install
+npm run dev
+```
+
+Abrir `http://localhost:3000`.
+
+### 3. Preparar la base (primer uso)
+
+La app necesita dos tablas propias (`dbo.app_usuarios` y `dbo.app_expedientes`) y un usuario admin.
+
+Opción A — vía Node (requiere tener `node_modules`):
+
+```bash
+MSSQL_PASSWORD=... node scripts/seed.js
+```
+
+Opción B — vía `sqlcmd` en la máquina del SQL Server, ejecutando `scripts/migrate.sql`, y luego insertar el usuario admin manualmente.
+
+El seed crea el usuario por defecto `admin / admin123`. Se puede configurar con `ADMIN_USERNAME`, `ADMIN_PASSWORD` y `ADMIN_NOMBRE`:
+
+```bash
+MSSQL_PASSWORD=... ADMIN_PASSWORD=clave-fuerte node scripts/seed.js
+```
+
+> Cambiar la contraseña del admin apenas se cree el sistema.
+
+## CSV de importación
+
+Columnas (pueden estar en español o inglés, sin distinción de mayúsculas):
+
+```
+Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado
+```
+
+- Solo `Expdte` es obligatoria.
+- El archivo se puede obtener desde la propia app (botón "Descargar plantilla" en `/expedientes/importar`).
+
+## Estructura
+
+```
+app/
+  login/                    → pantalla de acceso
+  expedientes/              → listado + filtros + detalle
+  expedientes/nuevo/        → alta manual
+  expedientes/importar/     → importación CSV
+  api/auth/                 → login, logout, me
+  api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
+  api/expedientes/import/   → importación CSV
+  api/expedientes/cargados/ → registros propios (app_expedientes)
+lib/
+  db.ts                     → pool MSSQL
+  auth.ts                   → JWT / contraseñas / sesión
+  csv.ts                    → parser de CSV
+  client.ts                 → helpers de fetch del cliente
+scripts/
+  migrate.sql               → esquema app_usuarios + app_expedientes
+  seed.js                   → aplica esquema y crea usuario admin
+```
+
+## API
+
+Todas las rutas requieren sesión (cookie `juridico_token`).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/auth/login` | Iniciar sesión `{username, password}` |
+| POST | `/api/auth/logout` | Cerrar sesión |
+| GET | `/api/auth/me` | Usuario actual |
+| GET | `/api/expedientes` | Listado de la vista. Filtros: `centro, unidad, expdte, actor, demandado, descripcion, documento, estado, q, page, pageSize` (+`historia=1` para incluir el XML) |
+| GET | `/api/expedientes/[expdte]` | Detalle de un expediente (`?centro=&unidad=` para desambiguar) |
+| POST | `/api/expedientes/nuevo` | Alta manual |
+| GET | `/api/expedientes/cargados` | Listado de `app_expedientes` (mismos filtros + `origen`) |
+| POST | `/api/expedientes/import` | Importación CSV (multipart, campo `file`) |
+
+---
+
+# Deploy en Dokploy
+
+## Requisitos
+
+- Repositorio GitHub: `https://github.com/brandall2021/juridico` (rama `master`).
+- Un servidor con Dokploy con acceso de red al SQL Server (`192.168.35.222:1433`). Como el SQL está en la LAN, el servidor Dokploy debe estar en esa misma red (o llegar por VPN/firewall), y Docker debe poder resolver el host.
+
+## Paso 1 — Crear la aplicación
+
+En Dokploy: **Projects → Nuevo proyecto → Nuevo servicio → Aplicación → Git**.
+
+- **Provider:** GitHub
+- **Repositorio:** `brandall2021/juridico`
+- **Branch:** `master`
+
+## Paso 2 — Configuración del build
+
+- **Type:** Dockerfile
+- **Docker Context:** `.`
+- El `Dockerfile` es multi-stage (instala deps → `next build` → imagen `standalone` de Node). No requiere más configuración de build.
+
+## Paso 3 — Variables de entorno
+
+Agregar en Dokploy (sección **Advanced → Environment**):
+
+```
+MSSQL_HOST=192.168.35.222
+MSSQL_PORT=1433
+MSSQL_USER=sa
+MSSQL_PASSWORD=***
+MSSQL_DATABASE=LegajoExpdtes
+JWT_SECRET=<secreto-aleatorio-fuerte>
+JWT_EXPIRES=7d
+APP_URL=https://<tu-dominio>
+```
+
+> `JWT_SECRET` debe ser único y no compartido. Generar con `openssl rand -base64 32`.
+
+## Paso 4 — Puerto y dominio
+
+- **Port:** `3000` (el Dockerfile expone 3000 y la app escucha en `0.0.0.0`).
+- En **Domains** agregar el dominio/subdominio (ej. `juridico.tudominio.com`). Dokploy genera el HTTPS automáticamente con Let's Encrypt.
+
+## Paso 5 — Base de datos (primer deploy)
+
+Las tablas `dbo.app_usuarios` y `dbo.app_expedientes` y el usuario admin deben existir antes de usar la app:
+
+1. Desde tu máquina, con acceso al SQL Server y a este repo:
+
+```bash
+npm install
+MSSQL_PASSWORD=... node scripts/seed.js
+```
+
+2. Verificá que devuelva `Esquema aplicado OK` y que cree `admin`.
+
+Si preferís no instalar dependencias, ejecutá `scripts/migrate.sql` con `sqlcmd`/SSMS en el propio SQL Server y creá el usuario admin con el hash bcrypt generado desde la app (o un script auxiliar).
+
+## Paso 6 — Deploy
+
+Click en **Deploy**. En los logs se debe ver la imagen build y el contenedor arrancando en `:3000`.
+
+### Redespliegue automático (webhook)
+
+Dokploy permite disparar el deploy desde GitHub Actions o `curl`. El webhook requiere `Content-Type: application/json` y el evento `push`:
+
+```bash
+curl -X POST https://<dokploy>/api/deploy/<refreshToken> \
+  -H "Content-Type: application/json" \
+  -H "X-GitHub-Event: push" \
+  -d '{"ref":"refs/heads/master"}'
+```
+
+## Comprobación post-deploy
+
+1. Abrir la URL de la app → debe redirigir a `/login`.
+2. Ingresar con `admin` y la contraseña configurada.
+3. Ir a `/expedientes` y probar un filtro — la tabla debe listar registros de `dbo.google`.
+4. Cargar un registro manual y uno por CSV → deben aparecer en la pestaña **Registros cargados**.
+
+## Solución de problemas
+
+- **"Failed to connect to <host>:1433"** → el SQL Server no acepta TCP. Habilitar TCP/IP en Configuration Manager, reiniciar el servicio y abrir el firewall en 1433.
+- **Login no funciona** → verificar que el seed se haya ejecutado (tabla `app_usuarios` con `admin`).
+- **No aparecen registros** → confirmar que la vista se llame `dbo.google` en la base `LegajoExpdtes` y que existan datos.
+- **Mixed content (http/https)** → si la app se sirve por HTTPS, todo debe ir por HTTPS. La app es fullstack (misma URL), por lo que no aplican llamadas a otra API.

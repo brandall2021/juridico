@@ -10,7 +10,7 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 - **Importación CSV** por arrastrar-y-soltar con plantilla descargable.
 - **Login simple** con usuarios propios (JWT en cookie httpOnly).
 - **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
-- **Vista de solo lectura**: los registros nuevos se guardan en una tabla propia (`dbo.app_expedientes`), nunca se escribe sobre la vista.
+- **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `dbo.google`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
 
 ## Stack
 
@@ -94,11 +94,35 @@ Reglas de seguridad:
 Columnas (pueden estar en español o inglés, sin distinción de mayúsculas):
 
 ```
-Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado
+Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado,Caratula,Historia
 ```
 
 - Solo `Expdte` es obligatoria.
+- `Caratula` vacía se genera automáticamente como `Actor C/ Demandado`.
+- El campo `Documento` se ignora (en la vista proviene de `ExpdtesLineas`, no de `ExpdtesCaratula`).
+- `Fecha` y `Fecha Procesado` se aceptan como `dd/mm/aaaa` o `aaaa-mm-dd`.
 - El archivo se puede obtener desde la propia app (botón "Descargar plantilla" en `/expedientes/importar`).
+
+## Carga de registros (mapeo)
+
+La vista `dbo.google` es solo lectura y combina `ExpdtesCaratula` con `CentrosJudiciales` y `ExpdtesLineas`. Al cargar un registro, la app hace el mapeo a la tabla real:
+
+| Campo del formulario/CSV | Columna en `dbo.ExpdtesCaratula` |
+|---|---|
+| Centro Judicial | `ExpdteCenJudId` (resuelto contra `CentrosJudiciales` por nombre y unidad) |
+| Unidad Judicial | `ExpdteUnidadJud` |
+| Expdte | `ExpdteNro` |
+| Actor / Demandado | `ExpdteActor` / `ExpdteDemandado` |
+| Fecha | `ExpdteFchUltMov` (date) |
+| Descripción | `ExpdteUltMovDescripcion` |
+| Fecha Procesado | `ExpdteFchUltProc` (date) |
+| Estado | `ExpdteActualizado` |
+| Historia | `ExpdteLegajo` (XML) |
+| Carátula | `ExpdteCaratula` (auto si vacía) |
+| — | `ExpdteId` = MAX+1 automático |
+| — | `ExpdteProvinciaNombre` = resuelta desde `Provincias` |
+
+Además se escribe un registro de auditoría en `dbo.app_expedientes` (usuario, origen MANUAL/CSV y fecha).
 
 ## Estructura
 
@@ -111,11 +135,12 @@ app/
   api/auth/                 → login, logout, me
   api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
   api/expedientes/import/   → importación CSV
-  api/expedientes/cargados/ → registros propios (app_expedientes)
+  api/expedientes/cargados/ → auditoría de cargas (app_expedientes)
   api/usuarios/             → gestión de usuarios y roles (ADMIN)
 lib/
   db.ts                     → pool MSSQL
   auth.ts                   → JWT / contraseñas / sesión
+  expedientes.ts            → mapeo e inserción en ExpdtesCaratula (transacción)
   csv.ts                    → parser de CSV
   client.ts                 → helpers de fetch del cliente
 scripts/
@@ -134,9 +159,9 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 | GET | `/api/auth/me` | Usuario actual |
 | GET | `/api/expedientes` | Listado de la vista. Filtros: `centro, unidad, expdte, actor, demandado, descripcion, documento, estado, q, page, pageSize` (+`historia=1` para incluir el XML) |
 | GET | `/api/expedientes/[expdte]` | Detalle de un expediente (`?centro=&unidad=` para desambiguar) |
-| POST | `/api/expedientes/nuevo` | Alta manual |
-| GET | `/api/expedientes/cargados` | Listado de `app_expedientes` (mismos filtros + `origen`) |
-| POST | `/api/expedientes/import` | Importación CSV (multipart, campo `file`) |
+| POST | `/api/expedientes/nuevo` | Alta manual (inserta en `dbo.ExpdtesCaratula` + auditoría) |
+| GET | `/api/expedientes/cargados` | Auditoría de cargas (`app_expedientes`, mismos filtros + `origen`) |
+| POST | `/api/expedientes/import` | Importación CSV (inserta en `dbo.ExpdtesCaratula`) |
 | GET | `/api/usuarios` | Listar usuarios (**ADMIN**) |
 | POST | `/api/usuarios` | Crear usuario (**ADMIN**) |
 | PUT | `/api/usuarios/[id]` | Editar nombre/rol/contraseña (**ADMIN**) |

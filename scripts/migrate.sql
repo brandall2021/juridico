@@ -30,6 +30,7 @@ BEGIN
     estado VARCHAR(2) NULL,
     origen VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
     creado_por INT NULL,
+    real_id NUMERIC NULL,
     creado_en DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
   );
 END

@@ -14,7 +14,7 @@ type Resultado = {
 };
 
 const TEMPLATE_HEADER =
-  "Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado";
+  "Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado,Caratula,Historia";
 
 export default function ImportarPage() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -67,7 +67,9 @@ export default function ImportarPage() {
           <h3 style={{ fontSize: 16 }}>Importar CSV</h3>
           <p className="muted" style={{ marginTop: 4 }}>
             Columnas: Centro Judicial, Unidad Judicial, Expdte, Actor, Demandado, Fecha,
-            Descripción, Documento, Fecha Procesado, Estado. Solo <code>Expdte</code> es obligatoria.
+            Descripción, Documento, Fecha Procesado, Estado, Caratula, Historia. Solo{" "}
+            <code>Expdte</code> es obligatoria; <code>Caratula</code> vacía se genera como{" "}
+            <em>Actor C/ Demandado</em>. El campo <code>Documento</code> se ignora.
           </p>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={descargarPlantilla}>
             Descargar plantilla

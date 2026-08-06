@@ -11,6 +11,8 @@ export type ExpedienteInput = {
   documento: string | null;
   fechaProcesado: string | null;
   estado: string | null;
+  caratula: string | null;
+  historia: string | null;
 };
 
 const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
@@ -31,6 +33,9 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   "fecha_procesado": "fechaProcesado",
   fechaprocesado: "fechaProcesado",
   estado: "estado",
+  caratula: "caratula",
+  "carátula": "caratula",
+  historia: "historia",
 };
 
 export async function parseCsv(
@@ -69,6 +74,8 @@ export async function parseCsv(
             documento: pick("documento"),
             fechaProcesado: pick("fechaProcesado"),
             estado: pick("estado"),
+            caratula: pick("caratula"),
+            historia: pick("historia"),
           });
           if (!pick("expdte")) errors.push(`Fila ${i + 1}: falta columna 'expdte' o 'expediente'`);
         });

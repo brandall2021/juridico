@@ -7,7 +7,7 @@ import AppShell from "@/components/AppShell";
 import AuthGuard from "@/components/AuthGuard";
 import { api } from "@/lib/client";
 
-const FIELDS: { key: string; label: string; required?: boolean }[] = [
+const FIELDS: { key: string; label: string; required?: boolean; wide?: boolean }[] = [
   { key: "expdte", label: "Expediente", required: true },
   { key: "centroJudicial", label: "Centro Judicial" },
   { key: "unidadJudicial", label: "Unidad Judicial" },
@@ -15,9 +15,9 @@ const FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "demandado", label: "Demandado" },
   { key: "fecha", label: "Fecha" },
   { key: "descripcion", label: "Descripción" },
-  { key: "documento", label: "Documento" },
   { key: "fechaProcesado", label: "Fecha Procesado" },
   { key: "estado", label: "Estado" },
+  { key: "caratula", label: "Carátula (si se deja vacío se genera: Actor C/ Demandado)", wide: true },
 ];
 
 export default function NuevoExpediente() {
@@ -60,7 +60,9 @@ export default function NuevoExpediente() {
         <div className="toolbar" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 16 }}>Cargar registro</h3>
           <p className="muted" style={{ marginTop: 4 }}>
-            El registro se guarda en <code>app_expedientes</code> (la vista dbo.google es solo lectura).
+            El registro se inserta en <code>dbo.ExpdtesCaratula</code> (aparece en la vista{" "}
+            <code>dbo.google</code>). El campo <em>Documento</em> no se carga (vive en{" "}
+            <code>ExpdtesLineas</code>).
           </p>
         </div>
 
@@ -70,7 +72,11 @@ export default function NuevoExpediente() {
         <form className="toolbar" onSubmit={handleSubmit}>
           <div className="form-grid">
             {FIELDS.map((f) => (
-              <div className="field" key={f.key}>
+              <div
+                className="field"
+                key={f.key}
+                style={f.wide ? { gridColumn: "1 / -1" } : undefined}
+              >
                 <label>
                   {f.label}
                   {f.required ? " *" : ""}
@@ -82,6 +88,14 @@ export default function NuevoExpediente() {
                 />
               </div>
             ))}
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label>Historia (XML, opcional)</label>
+              <textarea
+                value={form.historia || ""}
+                onChange={(e) => set("historia", e.target.value)}
+                placeholder="<expediente>...</expediente>"
+              />
+            </div>
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
             <button type="submit" className="btn" disabled={loading}>

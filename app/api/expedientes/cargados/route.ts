@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const total = countRows[0]?.total ?? 0;
 
     const rows = await query(
-      `SELECT id, centro_judicial AS [Centro Judicial], unidad_judicial AS [Unidad Judicial], expdte AS [Expdte], actor AS [Actor], demandado AS [Demandado], fecha AS [Fecha], descripcion AS [Descripcion], documento AS [Documento], fecha_procesado AS [Fecha Procesado], estado AS [Estado], origen AS [Origen], creado_por AS [CreadoPor], creado_en AS [CreadoEn]
+      `SELECT id, centro_judicial AS [Centro Judicial], unidad_judicial AS [Unidad Judicial], expdte AS [Expdte], actor AS [Actor], demandado AS [Demandado], fecha AS [Fecha], descripcion AS [Descripcion], documento AS [Documento], fecha_procesado AS [Fecha Procesado], estado AS [Estado], origen AS [Origen], real_id AS [IdReal], creado_por AS [CreadoPor], creado_en AS [CreadoEn]
        FROM dbo.app_expedientes ${whereSql}
        ORDER BY id DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
       { ...params, offset, pageSize }

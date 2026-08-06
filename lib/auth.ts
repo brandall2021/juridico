@@ -60,6 +60,21 @@ export function requireAuth(req: NextRequest) {
   return { session, response: null };
 }
 
+export function requireAdmin(req: NextRequest) {
+  const { session, response } = requireAuth(req);
+  if (response) return { session, response };
+  if (session!.rol !== "ADMIN") {
+    return {
+      session,
+      response: NextResponse.json({ error: "Requiere rol ADMIN" }, { status: 403 }),
+    };
+  }
+  return { session, response: null };
+}
+
+export const ROLES = ["ADMIN", "USER"] as const;
+export type Rol = (typeof ROLES)[number];
+
 export function hashPassword(plain: string): string {
   const bcrypt = require("bcryptjs");
   return bcrypt.hashSync(plain, 10);

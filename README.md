@@ -9,6 +9,7 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 - **Alta manual** de registros nuevos.
 - **Importación CSV** por arrastrar-y-soltar con plantilla descargable.
 - **Login simple** con usuarios propios (JWT en cookie httpOnly).
+- **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
 - **Vista de solo lectura**: los registros nuevos se guardan en una tabla propia (`dbo.app_expedientes`), nunca se escribe sobre la vista.
 
 ## Stack
@@ -66,13 +67,27 @@ MSSQL_PASSWORD=... node scripts/seed.js
 
 Opción B — vía `sqlcmd` en la máquina del SQL Server, ejecutando `scripts/migrate.sql`, y luego insertar el usuario admin manualmente.
 
-El seed crea el usuario por defecto `admin / admin123`. Se puede configurar con `ADMIN_USERNAME`, `ADMIN_PASSWORD` y `ADMIN_NOMBRE`:
+El seed crea el usuario por defecto `admin / admin123` y, si no existen, los usuarios de ejemplo `operador / operador123` y `consultor / consultor123` (rol `USER`). Se puede configurar con `ADMIN_USERNAME`, `ADMIN_PASSWORD` y `ADMIN_NOMBRE`, y desactivar los de ejemplo con `CREATE_EXAMPLE_USERS=false`:
 
 ```bash
 MSSQL_PASSWORD=... ADMIN_PASSWORD=clave-fuerte node scripts/seed.js
 ```
 
 > Cambiar la contraseña del admin apenas se cree el sistema.
+
+## Usuarios y roles
+
+| Rol | Acceso |
+|---|---|
+| `ADMIN` | Todo: consulta, alta manual, importación CSV y administración de usuarios (crear/editar/eliminar, cambiar rol y contraseña) |
+| `USER` | Consulta, alta manual e importación CSV (sin administrar usuarios) |
+
+La gestión se hace desde **Usuarios** (menú superior, solo visible para `ADMIN`): crear usuario, editar nombre/rol, resetear contraseña y eliminar.
+
+Reglas de seguridad:
+- Un admin no puede quitarse el rol ADMIN a sí mismo.
+- No se puede eliminar el propio usuario ni el último administrador.
+- Las contraseñas se almacenan con bcrypt (hash de 10 rondas).
 
 ## CSV de importación
 
@@ -97,6 +112,7 @@ app/
   api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
   api/expedientes/import/   → importación CSV
   api/expedientes/cargados/ → registros propios (app_expedientes)
+  api/usuarios/             → gestión de usuarios y roles (ADMIN)
 lib/
   db.ts                     → pool MSSQL
   auth.ts                   → JWT / contraseñas / sesión
@@ -121,6 +137,10 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 | POST | `/api/expedientes/nuevo` | Alta manual |
 | GET | `/api/expedientes/cargados` | Listado de `app_expedientes` (mismos filtros + `origen`) |
 | POST | `/api/expedientes/import` | Importación CSV (multipart, campo `file`) |
+| GET | `/api/usuarios` | Listar usuarios (**ADMIN**) |
+| POST | `/api/usuarios` | Crear usuario (**ADMIN**) |
+| PUT | `/api/usuarios/[id]` | Editar nombre/rol/contraseña (**ADMIN**) |
+| DELETE | `/api/usuarios/[id]` | Eliminar usuario (**ADMIN**) |
 
 ---
 

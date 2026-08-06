@@ -14,6 +14,8 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 - **Maestros**: alta de Centros Judiciales (`CentrosJudiciales`) y Provincias (`Provincias`) directamente desde la app (edición/eliminación solo ADMIN).
 - **Dashboard (centro de control)**: tarjetas KPI (total de expedientes, actualizados hoy, con/sin documento, estados SI/NO/KO) y panel de alertas jurídicas con acceso directo a listados filtrados.
 - **Bandeja de expedientes**: estados SI/NO/KO como badges de color, columna Documento como enlace "Ver documento" (la URL queda oculta), detalle en panel lateral (drawer) y búsqueda global por expediente, actor, demandado o documento. En mobile la tabla se convierte en tarjetas.
+- **Ordenamiento**: todas las columnas del listado son ordenables (ascendente/descendente) haciendo clic en el encabezado.
+- **Exportación**: descarga del listado filtrado a **CSV** (hasta 10.000 filas) o **PDF** (hasta 800 filas) con logo de recuperocrediticio.com y encabezado institucional.
 - **Navegación**: sidebar en desktop con menú hamburguesa en mobile, y franja de estado ("Sistema activo · total · última actualización · usuario").
 
 ## Stack

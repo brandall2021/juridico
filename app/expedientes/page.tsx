@@ -23,6 +23,39 @@ const SECONDARY_FILTERS = [
   { key: "descripcion", label: "Descripción" },
 ];
 
+const SORTABLE = [
+  { key: "expediente", label: "Expediente" },
+  { key: "actor", label: "Actor" },
+  { key: "demandado", label: "Demandado" },
+  { key: "unidad", label: "Unidad" },
+  { key: "fecha", label: "Último movimiento" },
+  { key: "fechaprocesado", label: "Fecha procesado" },
+  { key: "estado", label: "Estado" },
+  { key: "documento", label: "Documento" },
+];
+
+function Th({
+  sortKey,
+  label,
+  sort,
+  onSort,
+}: {
+  sortKey: string;
+  label: string;
+  sort: { key: string; dir: "asc" | "desc" };
+  onSort: (k: string) => void;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th>
+      <button className={`th-sort ${active ? "active" : ""}`} onClick={() => onSort(sortKey)}>
+        {label}
+        {active && <span className="th-arrow">{sort.dir === "asc" ? " ▲" : " ▼"}</span>}
+      </button>
+    </th>
+  );
+}
+
 export default function ExpedientesPage() {
   const [source, setSource] = useState<Source>("vista");
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -36,6 +69,10 @@ export default function ExpedientesPage() {
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Row | null>(null);
   const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({
+    key: "expediente",
+    dir: "asc",
+  });
 
   useEffect(() => {
     fetch("/api/expedientes/kpis", { cache: "no-store" })
@@ -68,6 +105,10 @@ export default function ExpedientesPage() {
     params.set("page", String(page));
     params.set("pageSize", String(PAGE_SIZE));
     if (source === "cargados") params.set("origen", "");
+    if (source === "vista") {
+      params.set("sort", sort.key);
+      params.set("order", sort.dir);
+    }
     const url = source === "vista" ? "/api/expedientes" : "/api/expedientes/cargados";
     const { data, error } = await api<{ total: number; rows: Row[] }>(`${url}?${params}`);
     setLoading(false);
@@ -77,7 +118,7 @@ export default function ExpedientesPage() {
     }
     setRows(data.rows);
     setTotal(data.total);
-  }, [source, filters, q, page]);
+  }, [source, filters, q, page, sort]);
 
   useEffect(() => {
     fetchRows();
@@ -115,6 +156,24 @@ export default function ExpedientesPage() {
     setSearchTerm("");
     setQ("");
     setPage(1);
+    setSort({ key: "expediente", dir: "asc" });
+  }
+
+  function ordenar(key: string) {
+    setSort((s) =>
+      s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
+    );
+    setPage(1);
+  }
+
+  function exportUrl(formato: "csv" | "pdf") {
+    const params = new URLSearchParams();
+    params.set("formato", formato);
+    for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
+    if (q) params.set("q", q);
+    params.set("sort", sort.key);
+    params.set("order", sort.dir);
+    return `/api/expedientes/export?${params.toString()}`;
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -170,6 +229,16 @@ export default function ExpedientesPage() {
           <Link href="/expedientes/importar" className="btn btn-ghost btn-sm">
             Importar CSV
           </Link>
+          {source === "vista" && (
+            <>
+              <a href={exportUrl("csv")} className="btn btn-ghost btn-sm" download>
+                Exportar CSV
+              </a>
+              <a href={exportUrl("pdf")} className="btn btn-ghost btn-sm" download>
+                Exportar PDF
+              </a>
+            </>
+          )}
         </div>
 
         {source === "vista" && kpis && <KpiCards kpis={kpis} />}
@@ -226,14 +295,22 @@ export default function ExpedientesPage() {
               <table className="table-desktop">
                 <thead>
                   <tr>
-                    <th>Expediente</th>
-                    <th>Actor</th>
-                    <th>Demandado</th>
-                    <th>Unidad</th>
-                    <th>Último movimiento</th>
-                    <th>Fecha procesado</th>
-                    <th>Estado</th>
-                    <th>Documento</th>
+                    {source === "vista" ? (
+                      SORTABLE.map((s) => (
+                        <Th key={s.key} sortKey={s.key} label={s.label} sort={sort} onSort={ordenar} />
+                      ))
+                    ) : (
+                      <>
+                        <th>Expediente</th>
+                        <th>Actor</th>
+                        <th>Demandado</th>
+                        <th>Unidad</th>
+                        <th>Último movimiento</th>
+                        <th>Fecha procesado</th>
+                        <th>Estado</th>
+                        <th>Documento</th>
+                      </>
+                    )}
                     {source === "cargados" && <th>Origen</th>}
                     {source === "vista" && <th></th>}
                   </tr>

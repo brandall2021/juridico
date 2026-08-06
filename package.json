@@ -9,13 +9,16 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/pdfkit": "^0.17.6",
     "bcryptjs": "^2.4.3",
     "csv-parse": "^5.6.0",
     "jsonwebtoken": "^9.0.2",
     "mssql": "^11.0.1",
     "next": "^14.2.32",
+    "pdfkit": "^0.19.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.7",

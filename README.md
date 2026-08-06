@@ -11,6 +11,7 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 - **Login simple** con usuarios propios (JWT en cookie httpOnly).
 - **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
 - **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `dbo.google`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
+- **Maestros**: alta de Centros Judiciales (`CentrosJudiciales`) y Provincias (`Provincias`) directamente desde la app (edición/eliminación solo ADMIN).
 
 ## Stack
 
@@ -166,6 +167,14 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 | POST | `/api/usuarios` | Crear usuario (**ADMIN**) |
 | PUT | `/api/usuarios/[id]` | Editar nombre/rol/contraseña (**ADMIN**) |
 | DELETE | `/api/usuarios/[id]` | Eliminar usuario (**ADMIN**) |
+| GET | `/api/centros` | Listar centros judiciales (con provincia) |
+| POST | `/api/centros` | Crear centro judicial (`CentroJudId` = MAX+1) |
+| PUT | `/api/centros/[id]` | Editar centro (**ADMIN**) |
+| DELETE | `/api/centros/[id]` | Eliminar centro (**ADMIN**) |
+| GET | `/api/provincias` | Listar provincias |
+| POST | `/api/provincias` | Crear provincia (`ProvinciaId` = MAX+1) |
+| PUT | `/api/provincias/[id]` | Editar provincia (**ADMIN**) |
+| DELETE | `/api/provincias/[id]` | Eliminar provincia (**ADMIN**) |
 
 ---
 

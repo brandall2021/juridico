@@ -14,14 +14,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const centro = url.searchParams.get("centro")?.trim();
     const unidad = url.searchParams.get("unidad")?.trim();
 
-    const where: string[] = ["[Expdte] = @expdte"];
+    const where: string[] = ["RTRIM([Expdte]) = @expdte"];
     const paramsObj: Record<string, string> = { expdte };
     if (centro) {
-      where.push("[Centro Judicial] = @centro");
+      where.push("RTRIM([Centro Judicial]) = @centro");
       paramsObj.centro = centro;
     }
     if (unidad) {
-      where.push("[Unidad Judicial] = @unidad");
+      where.push("RTRIM([Unidad Judicial]) = @unidad");
       paramsObj.unidad = unidad;
     }
 

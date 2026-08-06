@@ -1,7 +1,5 @@
-/* Seed: crea esquema app_usuarios/app_expedientes y el usuario admin inicial.
-   Uso: MSSQL_HOST=... MSSQL_PASSWORD=... node scripts/seed.js
-   Requiere mssql instalado (dependencia del proyecto). */
-require("dotenv").config?.();
+/* Seed: crea esquema app_usuarios/app_expedientes, usuario admin y usuarios de ejemplo.
+   Uso: node --env-file=.env scripts/seed.js  (o exportando MSSQL_* a mano) */
 const mssql = require("mssql");
 const bcrypt = require("bcryptjs");
 
@@ -57,7 +55,11 @@ async function main() {
 
   const pool = await mssql.connect(config);
 
-  await pool.request().batch(require("fs").readFileSync(__dirname + "/migrate.sql", "utf8"));
+  const sqlText = require("fs")
+    .readFileSync(__dirname + "/migrate.sql", "utf8")
+    .split(/\nGO\b/gi)
+    .join("\n");
+  await pool.request().batch(sqlText);
   console.log("Esquema aplicado OK");
 
   const hash = bcrypt.hashSync(ADMIN_PASSWORD, 10);

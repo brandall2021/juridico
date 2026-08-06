@@ -80,8 +80,8 @@ MSSQL_PASSWORD=... ADMIN_PASSWORD=clave-fuerte node scripts/seed.js
 
 | Rol | Acceso |
 |---|---|
-| `ADMIN` | Todo: consulta, alta manual, importación CSV y administración de usuarios (crear/editar/eliminar, cambiar rol y contraseña) |
-| `USER` | Consulta, alta manual e importación CSV (sin administrar usuarios) |
+| `ADMIN` | Todo: consulta, alta manual, importación CSV, administración de usuarios (crear/editar/eliminar, cambiar rol y contraseña) y edición/eliminación de centros judiciales y provincias |
+| `USER` | Consulta, alta manual, importación CSV y alta de centros judiciales y provincias (sin administrar usuarios ni editar/eliminar maestros) |
 
 La gestión se hace desde **Usuarios** (menú superior, solo visible para `ADMIN`): crear usuario, editar nombre/rol, resetear contraseña y eliminar.
 
@@ -133,11 +133,15 @@ app/
   expedientes/              → listado + filtros + detalle
   expedientes/nuevo/        → alta manual
   expedientes/importar/     → importación CSV
+  centros/                  → maestros: centros judiciales
+  provincias/               → maestros: provincias
   api/auth/                 → login, logout, me
   api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
   api/expedientes/import/   → importación CSV
   api/expedientes/cargados/ → auditoría de cargas (app_expedientes)
   api/usuarios/             → gestión de usuarios y roles (ADMIN)
+  api/centros/              → CRUD de CentrosJudiciales
+  api/provincias/           → CRUD de Provincias
 lib/
   db.ts                     → pool MSSQL
   auth.ts                   → JWT / contraseñas / sesión
@@ -179,6 +183,8 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 ---
 
 # Deploy en Dokploy
+
+> **Estado:** pendiente. El SQL Server está en la LAN (`192.168.35.222`) y los Dokploy disponibles no la alcanzan, por lo que todavía no se desplegó. Estas instrucciones quedan listas para cuando haya un Dokploy en la red (o un túnel/VPN hacia el SQL). Mientras tanto la app corre local (`npm run dev`) o como contenedor en la red.
 
 ## Requisitos
 

@@ -12,6 +12,9 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 - **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
 - **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `dbo.google`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
 - **Maestros**: alta de Centros Judiciales (`CentrosJudiciales`) y Provincias (`Provincias`) directamente desde la app (edición/eliminación solo ADMIN).
+- **Dashboard (centro de control)**: tarjetas KPI (total de expedientes, actualizados hoy, con/sin documento, estados SI/NO/KO) y panel de alertas jurídicas con acceso directo a listados filtrados.
+- **Bandeja de expedientes**: estados SI/NO/KO como badges de color, columna Documento como enlace "Ver documento" (la URL queda oculta), detalle en panel lateral (drawer) y búsqueda global por expediente, actor, demandado o documento. En mobile la tabla se convierte en tarjetas.
+- **Navegación**: sidebar en desktop con menú hamburguesa en mobile, y franja de estado ("Sistema activo · total · última actualización · usuario").
 
 ## Stack
 
@@ -139,6 +142,7 @@ app/
   api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
   api/expedientes/import/   → importación CSV
   api/expedientes/cargados/ → auditoría de cargas (app_expedientes)
+  api/expedientes/kpis/     → indicadores del dashboard (totales, estados, documento)
   api/usuarios/             → gestión de usuarios y roles (ADMIN)
   api/centros/              → CRUD de CentrosJudiciales
   api/provincias/           → CRUD de Provincias
@@ -148,6 +152,12 @@ lib/
   expedientes.ts            → mapeo e inserción en ExpdtesCaratula (transacción)
   csv.ts                    → parser de CSV
   client.ts                 → helpers de fetch del cliente
+components/
+  AppShell.tsx              → sidebar + franja de estado
+  AuthGuard.tsx             → sesión obligatoria
+  KpiCards.tsx              → tarjetas de indicadores
+  EstadoBadge.tsx           → badge SI / NO / KO
+  DocumentoCell.tsx         → enlace "Ver documento" / "Sin documento"
 scripts/
   migrate.sql               → esquema app_usuarios + app_expedientes
   seed.js                   → aplica esquema y crea usuario admin
@@ -162,7 +172,8 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 | POST | `/api/auth/login` | Iniciar sesión `{username, password}` |
 | POST | `/api/auth/logout` | Cerrar sesión |
 | GET | `/api/auth/me` | Usuario actual |
-| GET | `/api/expedientes` | Listado de la vista. Filtros: `centro, unidad, expdte, actor, demandado, descripcion, documento, estado, q, page, pageSize` (+`historia=1` para incluir el XML) |
+| GET | `/api/expedientes` | Listado de la vista. Filtros: `centro, unidad, expdte, actor, demandado, descripcion, documento, estado, q, page, pageSize` (+`historia=1` para incluir el XML). `q` busca en expediente, actor, demandado, descripción y documento |
+| GET | `/api/expedientes/kpis` | Indicadores del dashboard (totales, actualizados hoy, con/sin documento, SI/NO/KO, antiguos, última actualización) |
 | GET | `/api/expedientes/[expdte]` | Detalle de un expediente (`?centro=&unidad=` para desambiguar) |
 | POST | `/api/expedientes/nuevo` | Alta manual (inserta en `dbo.ExpdtesCaratula` + auditoría) |
 | GET | `/api/expedientes/cargados` | Auditoría de cargas (`app_expedientes`, mismos filtros + `origen`) |

@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import AuthGuard from "@/components/AuthGuard";
+import KpiCards, { type Kpis } from "@/components/KpiCards";
+import EstadoBadge from "@/components/EstadoBadge";
+import DocumentoCell, { docHref } from "@/components/DocumentoCell";
 import { api } from "@/lib/client";
 
 type Row = Record<string, any>;
@@ -11,38 +14,50 @@ type Source = "vista" | "cargados";
 
 const PAGE_SIZE = 20;
 
-const BASE_COLS = [
-  "Centro Judicial",
-  "Unidad Judicial",
-  "Expdte",
-  "Actor",
-  "Demandado",
-  "Fecha",
-  "Descripcion",
-  "Documento",
-  "Fecha Procesado",
-  "Estado",
-];
-
-const FILTERS: { key: string; label: string }[] = [
+const SECONDARY_FILTERS = [
   { key: "centro", label: "Centro Judicial" },
   { key: "unidad", label: "Unidad Judicial" },
   { key: "expdte", label: "Expediente" },
   { key: "actor", label: "Actor" },
   { key: "demandado", label: "Demandado" },
-  { key: "estado", label: "Estado" },
+  { key: "descripcion", label: "Descripción" },
 ];
 
 export default function ExpedientesPage() {
   const [source, setSource] = useState<Source>("vista");
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [searchTerm, setSearchTerm] = useState("");
   const [q, setQ] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Row | null>(null);
+  const [kpis, setKpis] = useState<Kpis | null>(null);
+
+  useEffect(() => {
+    fetch("/api/expedientes/kpis", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setKpis)
+      .catch(() => setKpis(null));
+  }, []);
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const f: Record<string, string> = {};
+    for (const k of ["centro", "unidad", "expdte", "actor", "demandado", "descripcion", "estado"]) {
+      const v = sp.get(k);
+      if (v) f[k] = v;
+    }
+    if (Object.keys(f).length) setFilters(f);
+    const qv = sp.get("q");
+    if (qv) {
+      setSearchTerm(qv);
+      setQ(qv);
+    }
+  }, []);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -89,12 +104,66 @@ export default function ExpedientesPage() {
     setPage(1);
   }
 
+  function buscar(e: React.FormEvent) {
+    e.preventDefault();
+    setQ(searchTerm.trim());
+    setPage(1);
+  }
+
+  function limpiar() {
+    setFilters({});
+    setSearchTerm("");
+    setQ("");
+    setPage(1);
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const filtroEstado = source === "vista" ? (
+    <div className="field">
+      <label>Estado</label>
+      <select value={filters["estado"] || ""} onChange={(e) => aplicarFiltro("estado", e.target.value)}>
+        <option value="">Todos</option>
+        <option value="SI">SI</option>
+        <option value="NO">NO</option>
+        <option value="KO">KO</option>
+      </select>
+    </div>
+  ) : (
+    <div className="field">
+      <label>Estado</label>
+      <input
+        value={filters["estado"] || ""}
+        onChange={(e) => aplicarFiltro("estado", e.target.value)}
+        placeholder="SI / NO / KO…"
+      />
+    </div>
+  );
 
   return (
     <AuthGuard>
       <AppShell>
-        <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="tabs" style={{ marginBottom: 0, flex: 1 }}>
+            <button
+              className={`tab ${source === "vista" ? "active" : ""}`}
+              onClick={() => {
+                setSource("vista");
+                setPage(1);
+              }}
+            >
+              Base (dbo.google)
+            </button>
+            <button
+              className={`tab ${source === "cargados" ? "active" : ""}`}
+              onClick={() => {
+                setSource("cargados");
+                setPage(1);
+              }}
+            >
+              Registros cargados
+            </button>
+          </div>
           <Link href="/expedientes/nuevo" className="btn btn-sm">
             + Cargar registro
           </Link>
@@ -103,96 +172,92 @@ export default function ExpedientesPage() {
           </Link>
         </div>
 
-        <div className="tabs">
-          <button
-            className={`tab ${source === "vista" ? "active" : ""}`}
-            onClick={() => {
-              setSource("vista");
-              setPage(1);
-            }}
-          >
-            Base (dbo.google)
-          </button>
-          <button
-            className={`tab ${source === "cargados" ? "active" : ""}`}
-            onClick={() => {
-              setSource("cargados");
-              setPage(1);
-            }}
-          >
-            Registros cargados
-          </button>
-        </div>
+        {source === "vista" && kpis && <KpiCards kpis={kpis} />}
 
-        <div className="toolbar">
-          <div className="form-grid">
-            {FILTERS.map((f) => (
-              <div className="field" key={f.key}>
-                <label>{f.label}</label>
-                <input
-                  value={filters[f.key] || ""}
-                  onChange={(e) => aplicarFiltro(f.key, e.target.value)}
-                  placeholder={`Filtrar por ${f.label.toLowerCase()}…`}
-                />
-              </div>
-            ))}
-            <div className="field">
-              <label>Búsqueda general</label>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Actor, demandado, expediente…"
-              />
+        <form className="search-bar" onSubmit={buscar}>
+          <input
+            className="search-big"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por expediente, actor, demandado o documento…"
+          />
+          <button className="btn" type="submit" disabled={loading}>
+            Buscar
+          </button>
+          <button
+            type="button"
+            className={`btn btn-ghost ${showFilters ? "active" : ""}`}
+            onClick={() => setShowFilters((s) => !s)}
+          >
+            Filtros
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={limpiar}>
+            Limpiar
+          </button>
+          <span className="meta">{total.toLocaleString()} registros</span>
+        </form>
+
+        {showFilters && (
+          <div className="toolbar">
+            <div className="form-grid">
+              {SECONDARY_FILTERS.map((f) => (
+                <div className="field" key={f.key}>
+                  <label>{f.label}</label>
+                  <input
+                    value={filters[f.key] || ""}
+                    onChange={(e) => aplicarFiltro(f.key, e.target.value)}
+                    placeholder={`Filtrar por ${f.label.toLowerCase()}…`}
+                  />
+                </div>
+              ))}
+              {filtroEstado}
             </div>
           </div>
-          <div className="row">
-            <button className="btn btn-sm" onClick={() => setPage(1)} disabled={loading}>
-              Aplicar
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setFilters({});
-                setQ("");
-                setPage(1);
-              }}
-            >
-              Limpiar
-            </button>
-            <span className="meta">
-              {total.toLocaleString()} registros
-            </span>
-          </div>
-        </div>
+        )}
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="muted" style={{ padding: 12 }}>Cargando…</div>}
 
-        {!loading && rows.length === 0 && (
-          <div className="empty">Sin resultados</div>
-        )}
+        {!loading && rows.length === 0 && <div className="empty">Sin resultados</div>}
 
         {rows.length > 0 && (
           <>
             <div className="table-wrap">
-              <table>
+              <table className="table-desktop">
                 <thead>
                   <tr>
-                    {BASE_COLS.map((c) => (
-                      <th key={c}>{c}</th>
-                    ))}
+                    <th>Expediente</th>
+                    <th>Actor</th>
+                    <th>Demandado</th>
+                    <th>Unidad</th>
+                    <th>Último movimiento</th>
+                    <th>Fecha procesado</th>
+                    <th>Estado</th>
+                    <th>Documento</th>
                     {source === "cargados" && <th>Origen</th>}
-                    <th></th>
+                    {source === "vista" && <th></th>}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row, i) => (
                     <tr key={i}>
-                      {BASE_COLS.map((c) => (
-                        <td key={c} className={c === "Expdte" ? "mono" : ""}>
-                          {row[c] ?? ""}
-                        </td>
-                      ))}
+                      <td className="mono">{row["Expdte"] ?? ""}</td>
+                      <td>{row["Actor"] ?? ""}</td>
+                      <td>{row["Demandado"] ?? ""}</td>
+                      <td>
+                        {row["Unidad Judicial"] ?? ""}
+                        {row["Centro Judicial"] && (
+                          <div className="subtext">{row["Centro Judicial"]}</div>
+                        )}
+                      </td>
+                      <td>{row["Fecha"] ?? ""}</td>
+                      <td>{row["Fecha Procesado"] ?? ""}</td>
+                      <td>
+                        <EstadoBadge estado={row["Estado"]} />
+                      </td>
+                      <td>
+                        <DocumentoCell doc={row["Documento"]} />
+                      </td>
                       {source === "cargados" && (
                         <td>
                           <span className={`badge ${row["Origen"] === "MANUAL" ? "" : "ok"}`}>
@@ -200,17 +265,61 @@ export default function ExpedientesPage() {
                           </span>
                         </td>
                       )}
-                      <td>
-                        {source === "vista" && (
+                      {source === "vista" && (
+                        <td>
                           <button className="btn btn-ghost btn-sm" onClick={() => verDetalle(row)}>
                             Ver
                           </button>
-                        )}
-                      </td>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              <div className="card-list">
+                {rows.map((row, i) => (
+                  <div className="card" key={i}>
+                    <div className="card-head">
+                      <span className="mono" style={{ fontWeight: 600 }}>{row["Expdte"] ?? ""}</span>
+                      <EstadoBadge estado={row["Estado"]} />
+                    </div>
+                    <div className="card-row">
+                      <span>Actor</span>
+                      <span>{row["Actor"] || "—"}</span>
+                    </div>
+                    <div className="card-row">
+                      <span>Demandado</span>
+                      <span>{row["Demandado"] || "—"}</span>
+                    </div>
+                    <div className="card-row">
+                      <span>Unidad</span>
+                      <span>
+                        {row["Unidad Judicial"] || "—"}
+                        {row["Centro Judicial"] && <div className="subtext">{row["Centro Judicial"]}</div>}
+                      </span>
+                    </div>
+                    <div className="card-row">
+                      <span>Último movimiento</span>
+                      <span>{row["Fecha"] || "—"}</span>
+                    </div>
+                    {source === "cargados" && (
+                      <div className="card-row">
+                        <span>Origen</span>
+                        <span>{row["Origen"] || "—"}</span>
+                      </div>
+                    )}
+                    <div className="card-actions">
+                      <DocumentoCell doc={row["Documento"]} />
+                      {source === "vista" && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => verDetalle(row)}>
+                          Ver
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="pagination">
@@ -236,68 +345,57 @@ export default function ExpedientesPage() {
         )}
 
         {detalle && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,.6)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 24,
-              zIndex: 50,
-            }}
-            onClick={() => setDetalle(null)}
-          >
-            <div
-              className="panel"
-              style={{
-                background: "var(--panel)",
-                border: "1px solid var(--border)",
-                borderRadius: 12,
-                maxWidth: 720,
-                width: "100%",
-                maxHeight: "85vh",
-                overflow: "auto",
-                padding: 24,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                <h3 style={{ fontSize: 17 }}>Expediente {detalle["Expdte"]}</h3>
+          <div className="drawer-overlay" onClick={() => setDetalle(null)}>
+            <aside className="drawer" onClick={(e) => e.stopPropagation()}>
+              <div className="drawer-head">
+                <div>
+                  <div className="muted" style={{ fontSize: 12 }}>Expediente</div>
+                  <h3 style={{ fontSize: 18 }}>{detalle["Expdte"]}</h3>
+                </div>
                 <button className="btn btn-ghost btn-sm" onClick={() => setDetalle(null)}>
-                  Cerrar
+                  ✕
                 </button>
               </div>
-              <div className="form-grid" style={{ gap: 12 }}>
-                {BASE_COLS.map((c) => (
-                  <div className="field" key={c} style={{ gridColumn: c === "Descripcion" || c === "Documento" ? "span 2" : undefined }}>
-                    <label>{c}</label>
-                    <div style={{ wordBreak: "break-word" }}>{detalle[c] || <span className="muted">—</span>}</div>
-                  </div>
-                ))}
-              </div>
-              {detalle["Historia"] && (
-                <div className="field" style={{ marginTop: 16 }}>
-                  <label>Historia (XML)</label>
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      background: "var(--panel-2)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      padding: 12,
-                      fontSize: 12,
-                      maxHeight: 240,
-                      overflow: "auto",
-                    }}
-                  >
-                    {detalle["Historia"]}
-                  </pre>
+              <div className="drawer-body">
+                <div style={{ marginBottom: 14 }}>
+                  <EstadoBadge estado={detalle["Estado"]} />
                 </div>
-              )}
-            </div>
+                <dl className="dl">
+                  <dt>Centro Judicial</dt>
+                  <dd>{detalle["Centro Judicial"] || "—"}</dd>
+                  <dt>Unidad Judicial</dt>
+                  <dd>{detalle["Unidad Judicial"] || "—"}</dd>
+                  <dt>Actor</dt>
+                  <dd>{detalle["Actor"] || "—"}</dd>
+                  <dt>Demandado</dt>
+                  <dd>{detalle["Demandado"] || "—"}</dd>
+                  <dt>Último movimiento</dt>
+                  <dd>{detalle["Fecha"] || "—"}</dd>
+                  <dt>Fecha procesado</dt>
+                  <dd>{detalle["Fecha Procesado"] || "—"}</dd>
+                  <dt>Documento</dt>
+                  <dd>
+                    {detalle["Documento"] ? (
+                      <a href={docHref(detalle["Documento"])} target="_blank" rel="noreferrer">
+                        Abrir documento
+                      </a>
+                    ) : (
+                      <span className="badge soft">Sin documento</span>
+                    )}
+                  </dd>
+                </dl>
+                <div className="field" style={{ marginTop: 16 }}>
+                  <label>Descripción</label>
+                  <div>{detalle["Descripcion"] || "—"}</div>
+                </div>
+                {detalle["Historia"] && (
+                  <div className="field" style={{ marginTop: 16 }}>
+                    <label>Historia (XML)</label>
+                    <pre className="xml-pre">{detalle["Historia"]}</pre>
+                  </div>
+                )}
+              </div>
+            </aside>
           </div>
         )}
       </AppShell>

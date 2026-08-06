@@ -45,7 +45,7 @@ function buildWhere(searchParams: URLSearchParams): { where: string; params: Rec
 
   const q = searchParams.get("q")?.trim();
   if (q) {
-    where.push(`([Expdte] LIKE '%' + @q + '%' OR [Actor] LIKE '%' + @q + '%' OR [Demandado] LIKE '%' + @q + '%' OR [Descripcion] LIKE '%' + @q + '%')`);
+    where.push(`([Expdte] LIKE '%' + @q + '%' OR [Actor] LIKE '%' + @q + '%' OR [Demandado] LIKE '%' + @q + '%' OR [Descripcion] LIKE '%' + @q + '%' OR [Documento] LIKE '%' + @q + '%')`);
     params["q"] = q;
   }
 

@@ -28,6 +28,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </h1>
           <nav style={{ display: "flex", gap: 14 }}>
             <a href="/expedientes">Expedientes</a>
+            <a href="/centros">Centros</a>
+            <a href="/provincias">Provincias</a>
             {user?.rol === "ADMIN" && <a href="/usuarios">Usuarios</a>}
           </nav>
         </div>

@@ -127,6 +127,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </>
         )}
       </div>
+
+      <footer className="footer">
+        © {new Date().getFullYear()} <a href="https://softgroup.com.ar" target="_blank" rel="noreferrer">softgroup.com.ar</a>
+      </footer>
     </div>
   );
 }

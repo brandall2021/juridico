@@ -110,6 +110,7 @@ Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documen
 ```
 
 - Solo `Expdte` es obligatoria y debe mapearse a alguna columna.
+- **No se insertan duplicados**: antes de importar se verifica en `dbo.ExpdtesCaratula` si ya existe un expediente con ese número (mismo comportamiento en la carga manual); los que ya existen se saltan y se cuentan como "duplicados".
 - `Caratula` vacía se genera automáticamente como `Actor C/ Demandado`.
 - El campo `Documento` se ignora (en la vista proviene de `ExpdtesLineas`, no de `ExpdtesCaratula`).
 - `Fecha` y `Fecha Procesado` se aceptan como `dd/mm/aaaa` o `aaaa-mm-dd`.

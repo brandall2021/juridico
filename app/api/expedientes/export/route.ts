@@ -160,7 +160,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const logoPath = path.join(process.cwd(), "public", "logo.jpg");
+    const logoPng = path.join(process.cwd(), "public", "logo.png");
+    const logoJpg = path.join(process.cwd(), "public", "logo.jpg");
+    const logoPath = fs.existsSync(logoPng) ? logoPng : logoJpg;
     const pdf = await buildPdf(rows, fs.existsSync(logoPath) ? logoPath : null, rows.length);
     return new NextResponse(new Uint8Array(pdf), {
       headers: {

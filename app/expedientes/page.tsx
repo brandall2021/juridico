@@ -223,9 +223,6 @@ export default function ExpedientesPage() {
               Registros cargados
             </button>
           </div>
-          <Link href="/expedientes/nuevo" className="btn btn-sm">
-            + Cargar registro
-          </Link>
           <Link href="/expedientes/importar" className="btn btn-ghost btn-sm">
             Importar CSV
           </Link>

@@ -145,7 +145,6 @@ Además se escribe un registro de auditoría en `dbo.app_expedientes` (usuario, 
 app/
   login/                    → pantalla de acceso
   expedientes/              → listado + filtros + detalle
-  expedientes/nuevo/        → alta manual
   expedientes/importar/     → importación CSV
   centros/                  → maestros: centros judiciales
   provincias/               → maestros: provincias
@@ -287,7 +286,7 @@ curl -X POST https://<dokploy>/api/deploy/<refreshToken> \
 1. Abrir la URL de la app → debe redirigir a `/login`.
 2. Ingresar con `admin` y la contraseña configurada.
 3. Ir a `/expedientes` y probar un filtro — la tabla debe listar registros de `dbo.google`.
-4. Cargar un registro manual y uno por CSV → deben aparecer en la pestaña **Registros cargados**.
+4. Importar un archivo CSV → los registros deben aparecer en la pestaña **Registros cargados**.
 
 ## Solución de problemas
 

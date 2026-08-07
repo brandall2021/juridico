@@ -2,19 +2,21 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LayoutDashboard, FolderOpen, Upload, Building2, MapPin, Users } from "lucide-react";
 import { getMe } from "@/lib/client";
 import type { Kpis } from "@/components/KpiCards";
 
 type User = { nombre: string; username: string; rol: string };
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/expedientes", label: "Expedientes" },
-  { href: "/expedientes/nuevo", label: "Cargar registro" },
-  { href: "/expedientes/importar", label: "Importar CSV" },
-  { href: "/centros", label: "Centros" },
-  { href: "/provincias", label: "Provincias" },
+  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+  { href: "/expedientes", label: "Expedientes", Icon: FolderOpen },
+  { href: "/expedientes/importar", label: "Importar CSV", Icon: Upload },
+  { href: "/centros", label: "Centros", Icon: Building2 },
+  { href: "/provincias", label: "Provincias", Icon: MapPin },
 ];
+
+type NavItem = (typeof NAV)[number];
 
 function fmtFecha(s: string | null | undefined) {
   if (!s) return "—";
@@ -43,7 +45,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  const nav = user?.rol === "ADMIN" ? [...NAV, { href: "/usuarios", label: "Usuarios" }] : NAV;
+  const nav: NavItem[] = user?.rol === "ADMIN" ? [...NAV, { href: "/usuarios", label: "Usuarios", Icon: Users }] : NAV;
 
   return (
     <div className="app-shell">
@@ -74,7 +76,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <nav className="side-nav">
             {nav.map((n) => (
               <a key={n.href} href={n.href} className={pathname === n.href ? "active" : ""}>
-                {n.label}
+                <n.Icon size={16} strokeWidth={2} />
+                <span>{n.label}</span>
               </a>
             ))}
           </nav>
@@ -104,7 +107,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   className={pathname === n.href ? "active" : ""}
                   onClick={() => setMenu(false)}
                 >
-                  {n.label}
+                  <n.Icon size={16} strokeWidth={2} />
+                  <span>{n.label}</span>
                 </a>
               ))}
             </nav>

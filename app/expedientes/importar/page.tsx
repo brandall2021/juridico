@@ -250,9 +250,47 @@ export default function ImportarPage() {
                 );
               })}
             </div>
+
+            <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Vista previa del mapeo</h3>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              Primeros {preview.rows.length} registro{preview.rows.length === 1 ? "" : "s"} del archivo
+              con los campos ya mapeados. Verificá que los valores correspondan antes de confirmar.
+            </p>
+            {MAP_FIELDS.some((f) => mapping[f.key]) ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      {MAP_FIELDS.filter((f) => mapping[f.key]).map((f) => (
+                        <th key={f.key}>
+                          {f.label}
+                          <div className="muted" style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                            ← {mapping[f.key]}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.rows.map((row, i) => (
+                      <tr key={i}>
+                        {MAP_FIELDS.filter((f) => mapping[f.key]).map((f) => (
+                          <td key={f.key}>{row[mapping[f.key]] ?? ""}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted">Seleccioná al menos un campo para ver la vista previa.</p>
+            )}
+
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
               <button className="btn" onClick={importar} disabled={importing}>
-                {importing ? "Importando…" : `Importar ${preview.total} registro${preview.total === 1 ? "" : "s"}`}
+                {importing
+                  ? "Importando…"
+                  : `Confirmar e importar ${preview.total} registro${preview.total === 1 ? "" : "s"}`}
               </button>
             </div>
           </div>

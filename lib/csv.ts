@@ -82,7 +82,7 @@ export async function parseCsvPreview(
   buffer: Buffer
 ): Promise<{ columns: string[]; rows: Record<string, string>[]; total: number; errors: string[] }> {
   const { columns, rows } = await parseRows(buffer);
-  return { columns, rows: rows.slice(0, 3), total: rows.length, errors: [] };
+  return { columns, rows: rows.slice(0, 5), total: rows.length, errors: [] };
 }
 
 export async function parseCsv(

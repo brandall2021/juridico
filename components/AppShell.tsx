@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FolderOpen, Upload, Building2, MapPin, Users } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Upload, FileArchive, Building2, MapPin, Users } from "lucide-react";
 import { getMe } from "@/lib/client";
 import type { Kpis } from "@/components/KpiCards";
 
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/expedientes", label: "Expedientes", Icon: FolderOpen },
   { href: "/expedientes/importar", label: "Importar CSV", Icon: Upload },
+  { href: "/expedientes/archivos", label: "Archivos subidos", Icon: FileArchive },
   { href: "/centros", label: "Centros", Icon: Building2 },
   { href: "/provincias", label: "Provincias", Icon: MapPin },
 ];
@@ -54,9 +55,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <button className="btn btn-ghost btn-sm hamburger" onClick={() => setMenu(true)} aria-label="Abrir menú">
             ☰
           </button>
-          <h1>
-            <a href="/dashboard" style={{ color: "var(--text)", textDecoration: "none" }}>
-              Expedientes Jurídicos
+          <h1 style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <a
+              href="/dashboard"
+              style={{ color: "var(--text)", textDecoration: "none", display: "flex", alignItems: "center", gap: 10 }}
+            >
+              <img
+                src="/logo.png"
+                alt="Logo"
+                className="topbar-logo"
+                width={96}
+                height={35}
+                style={{ objectFit: "contain" }}
+              />
+              <span>Expedientes Jurídicos</span>
             </a>
           </h1>
         </div>

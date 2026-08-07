@@ -1,4 +1,4 @@
-import sql, { getPool } from "@/lib/db";
+import sql, { getPool, execute } from "@/lib/db";
 
 export type CargaInput = {
   centroJudicial: string | null;
@@ -31,6 +31,37 @@ export function esXmlValido(s: string | null): boolean {
   const t = s.trim();
   if (!t.startsWith("<") || !t.endsWith(">")) return false;
   return /<\/[^>]+>/.test(t) || t.endsWith("/>");
+}
+
+export type CargaRegistro = {
+  archivo: string;
+  tamano: number;
+  filasLeidas: number;
+  insertados: number;
+  duplicados: number;
+  errores: string[];
+};
+
+export async function registrarCarga(
+  c: CargaRegistro,
+  creadoPor: number
+): Promise<number> {
+  const r = await execute(
+    `INSERT INTO dbo.app_cargas (archivo, tamano, filas_leidas, insertados, duplicados, errores, detalle_errores, creado_por)
+     OUTPUT INSERTED.id
+     VALUES (@archivo, @tamano, @leidas, @insertados, @duplicados, @errores, @detalle, @creadoPor)`,
+    {
+      archivo: c.archivo,
+      tamano: c.tamano,
+      leidas: c.filasLeidas,
+      insertados: c.insertados,
+      duplicados: c.duplicados,
+      errores: c.errores.length,
+      detalle: c.errores.length ? c.errores.join("\n").slice(0, 4000) : null,
+      creadoPor,
+    }
+  );
+  return Number(r.recordset[0].id);
 }
 
 export function caratulaAuto(r: CargaInput): string {

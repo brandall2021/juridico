@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCsv, type ColumnMapping } from "@/lib/csv";
-import { insertarEnCaratula } from "@/lib/expedientes";
+import { insertarEnCaratula, registrarCarga } from "@/lib/expedientes";
 import { requireAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -35,8 +35,21 @@ export async function POST(req: NextRequest) {
 
     const { insertados, errores, duplicados } = await insertarEnCaratula(records, session!.id, "CSV");
 
+    const cargaId = await registrarCarga(
+      {
+        archivo: file.name,
+        tamano: file.size,
+        filasLeidas: records.length,
+        insertados,
+        duplicados,
+        errores: [...errors, ...errores],
+      },
+      session!.id
+    );
+
     return NextResponse.json({
       ok: true,
+      cargaId,
       totalLeidos: records.length,
       insertados,
       duplicados,

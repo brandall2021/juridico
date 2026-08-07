@@ -63,7 +63,7 @@ Abrir `http://localhost:3000`.
 
 ### 3. Preparar la base (primer uso)
 
-La app necesita dos tablas propias (`dbo.app_usuarios` y `dbo.app_expedientes`) y un usuario admin.
+La app necesita tres tablas propias (`dbo.app_usuarios`, `dbo.app_expedientes` y `dbo.app_cargas`) y un usuario admin.
 
 Opción A — vía Node (requiere tener `node_modules`):
 
@@ -117,6 +117,7 @@ Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado
 - Los campos `Documento`, `Fecha`, `Descripcion`, `Fecha Procesado`, `Estado`, `Caratula` e `Historia` del archivo no se importan.
 - El archivo se puede obtener desde la propia app (botón "Descargar plantilla" en `/expedientes/importar`).
 - Se aceptan tanto `;` como `,` como separador de columnas, y archivos con BOM (UTF-8 con firma, como exporta Excel).
+- Cada importación se registra en `dbo.app_cargas` (nombre y tamaño del archivo, usuario, fecha, filas leídas, insertados, duplicados y errores). El listado se ve en **Archivos subidos** (`/expedientes/archivos`).
 
 ## Carga de registros (mapeo)
 
@@ -146,11 +147,13 @@ app/
   login/                    → pantalla de acceso
   expedientes/              → listado + filtros + detalle
   expedientes/importar/     → importación CSV
+  expedientes/archivos/     → archivos CSV subidos (auditoría de cargas)
   centros/                  → maestros: centros judiciales
   provincias/               → maestros: provincias
   api/auth/                 → login, logout, me
   api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
   api/expedientes/import/   → importación CSV (POST) y análisis de archivo (preview)
+  api/expedientes/cargas/   → registro de archivos subidos (app_cargas)
   api/expedientes/cargados/ → auditoría de cargas (app_expedientes)
   api/expedientes/kpis/     → indicadores del dashboard (totales, estados, documento)
   api/expedientes/charts/   → datos para gráficos (estados, documentos, por mes)
@@ -171,7 +174,7 @@ components/
   EstadoBadge.tsx           → badge SI / NO / KO
   DocumentoCell.tsx         → enlace "Ver documento" / "Sin documento"
 scripts/
-  migrate.sql               → esquema app_usuarios + app_expedientes
+  migrate.sql               → esquema app_usuarios + app_expedientes + app_cargas
   seed.js                   → aplica esquema y crea usuario admin
 ```
 
@@ -189,8 +192,9 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 | GET | `/api/expedientes/[expdte]` | Detalle de un expediente (`?centro=&unidad=` para desambiguar) |
 | POST | `/api/expedientes/nuevo` | Alta manual (inserta en `dbo.ExpdtesCaratula` + auditoría) |
 | GET | `/api/expedientes/cargados` | Auditoría de cargas (`app_expedientes`, mismos filtros + `origen`) |
-| POST | `/api/expedientes/import` | Importación CSV (inserta en `dbo.ExpdtesCaratula`). Opcional: campo `mapping` (JSON `{campo: columna}`) |
+| POST | `/api/expedientes/import` | Importación CSV (inserta en `dbo.ExpdtesCaratula` + registra la carga en `app_cargas`). Opcional: campo `mapping` (JSON `{campo: columna}`) |
 | POST | `/api/expedientes/import/preview` | Analiza un CSV y devuelve columnas, total y primeras filas (solo lectura) |
+| GET | `/api/expedientes/cargas` | Archivos subidos (`app_cargas`). Filtros: `q, desde, hasta, page, pageSize` |
 | GET | `/api/usuarios` | Listar usuarios (**ADMIN**) |
 | POST | `/api/usuarios` | Crear usuario (**ADMIN**) |
 | PUT | `/api/usuarios/[id]` | Editar nombre/rol/contraseña (**ADMIN**) |
@@ -253,7 +257,7 @@ APP_URL=https://<tu-dominio>
 
 ## Paso 5 — Base de datos (primer deploy)
 
-Las tablas `dbo.app_usuarios` y `dbo.app_expedientes` y el usuario admin deben existir antes de usar la app:
+Las tablas `dbo.app_usuarios`, `dbo.app_expedientes` y `dbo.app_cargas` y el usuario admin deben existir antes de usar la app:
 
 1. Desde tu máquina, con acceso al SQL Server y a este repo:
 

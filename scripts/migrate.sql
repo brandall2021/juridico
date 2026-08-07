@@ -14,6 +14,24 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'app_cargas' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.app_cargas (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    archivo NVARCHAR(255) NOT NULL,
+    tamano BIGINT NULL,
+    filas_leidas INT NOT NULL DEFAULT 0,
+    insertados INT NOT NULL DEFAULT 0,
+    duplicados INT NOT NULL DEFAULT 0,
+    errores INT NOT NULL DEFAULT 0,
+    detalle_errores NVARCHAR(MAX) NULL,
+    origen VARCHAR(10) NOT NULL DEFAULT 'CSV',
+    creado_por INT NULL,
+    creado_en DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
+
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'app_expedientes' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
   CREATE TABLE dbo.app_expedientes (

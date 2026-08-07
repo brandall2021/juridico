@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCsv } from "@/lib/csv";
+import { parseCsv, type ColumnMapping } from "@/lib/csv";
 import { insertarEnCaratula } from "@/lib/expedientes";
 import { requireAuth } from "@/lib/auth";
 
@@ -16,8 +16,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Archivo CSV requerido (campo 'file')" }, { status: 400 });
     }
 
+    let mapping: ColumnMapping | undefined;
+    const mappingRaw = formData.get("mapping");
+    if (mappingRaw) {
+      try {
+        mapping = JSON.parse(String(mappingRaw)) as ColumnMapping;
+      } catch {
+        return NextResponse.json({ error: "campo 'mapping' inválido (debe ser JSON)" }, { status: 400 });
+      }
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { records, errors } = await parseCsv(buffer);
+    const { records, errors } = await parseCsv(buffer, mapping);
 
     if (records.length === 0) {
       return NextResponse.json({ error: "No se encontraron registros válidos en el CSV", errors }, { status: 400 });

@@ -15,6 +15,22 @@ export type ExpedienteInput = {
   historia: string | null;
 };
 
+export type ColumnMapping = Partial<Record<keyof ExpedienteInput, string>>;
+
+export const IMPORT_FIELDS: (keyof ExpedienteInput)[] = [
+  "expdte",
+  "centroJudicial",
+  "unidadJudicial",
+  "actor",
+  "demandado",
+  "fecha",
+  "descripcion",
+  "fechaProcesado",
+  "estado",
+  "caratula",
+  "historia",
+];
+
 const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   "centro judicial": "centroJudicial",
   "centro_judicial": "centroJudicial",
@@ -38,49 +54,75 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   historia: "historia",
 };
 
-export async function parseCsv(
-  buffer: Buffer
-): Promise<{ records: ExpedienteInput[]; errors: string[] }> {
+function parseRows(
+  buffer: Buffer,
+  mapping?: ColumnMapping
+): Promise<{ columns: string[]; rows: Record<string, string>[] }> {
   return new Promise((resolve, reject) => {
     parse(
       buffer,
       {
-        columns: (header) =>
-          header.map((h: string) => {
-            const key = HEADER_ALIASES[h.trim().toLowerCase()];
-            return key ?? h.trim().toLowerCase();
-          }),
+        columns: true,
+        delimiter: [",", ";"],
         skip_empty_lines: true,
         trim: true,
         relax_column_count: true,
+        bom: true,
       },
       (err, rows: Record<string, string>[]) => {
         if (err) return reject(err);
-        const records: ExpedienteInput[] = [];
-        const errors: string[] = [];
-        rows.forEach((row, i) => {
-          const pick = (field: keyof ExpedienteInput): string | null => {
-            const v = row[field] ?? row[HEADER_ALIASES[field]];
-            return v && String(v).trim() !== "" ? String(v).trim() : null;
-          };
-          records.push({
-            centroJudicial: pick("centroJudicial"),
-            unidadJudicial: pick("unidadJudicial"),
-            expdte: pick("expdte"),
-            actor: pick("actor"),
-            demandado: pick("demandado"),
-            fecha: pick("fecha"),
-            descripcion: pick("descripcion"),
-            documento: pick("documento"),
-            fechaProcesado: pick("fechaProcesado"),
-            estado: pick("estado"),
-            caratula: pick("caratula"),
-            historia: pick("historia"),
-          });
-          if (!pick("expdte")) errors.push(`Fila ${i + 1}: falta columna 'expdte' o 'expediente'`);
-        });
-        resolve({ records, errors });
+        const columns = rows.length ? Object.keys(rows[0]) : [];
+        resolve({ columns, rows });
       }
     );
   });
+}
+
+export async function parseCsvPreview(
+  buffer: Buffer
+): Promise<{ columns: string[]; rows: Record<string, string>[]; total: number; errors: string[] }> {
+  const { columns, rows } = await parseRows(buffer);
+  return { columns, rows: rows.slice(0, 3), total: rows.length, errors: [] };
+}
+
+export async function parseCsv(
+  buffer: Buffer,
+  mapping?: ColumnMapping
+): Promise<{ records: ExpedienteInput[]; errors: string[]; columns: string[] }> {
+  const { columns, rows } = await parseRows(buffer, mapping);
+  const errors: string[] = [];
+
+  const colFor = (field: keyof ExpedienteInput): string | null => {
+    const explicit = mapping?.[field];
+    if (explicit) return explicit;
+    return columns.find((c) => HEADER_ALIASES[c.trim().toLowerCase()] === field) ?? null;
+  };
+
+  const pick = (field: keyof ExpedienteInput, row: Record<string, string>): string | null => {
+    const col = colFor(field);
+    if (!col) return null;
+    const v = row[col];
+    return v && String(v).trim() !== "" ? String(v).trim() : null;
+  };
+
+  const records: ExpedienteInput[] = rows.map((row) => ({
+    centroJudicial: pick("centroJudicial", row),
+    unidadJudicial: pick("unidadJudicial", row),
+    expdte: pick("expdte", row),
+    actor: pick("actor", row),
+    demandado: pick("demandado", row),
+    fecha: pick("fecha", row),
+    descripcion: pick("descripcion", row),
+    documento: pick("documento", row),
+    fechaProcesado: pick("fechaProcesado", row),
+    estado: pick("estado", row),
+    caratula: pick("caratula", row),
+    historia: pick("historia", row),
+  }));
+
+  records.forEach((r, i) => {
+    if (!r.expdte) errors.push(`Fila ${i + 1}: falta el expediente (columna no mapeada o vacía)`);
+  });
+
+  return { records, errors, columns };
 }

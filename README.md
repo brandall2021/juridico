@@ -7,7 +7,7 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 - **Consulta** de la vista `dbo.google` con filtros (centro judicial, unidad judicial, expediente, actor, demandado, estado y búsqueda general) y paginación.
 - **Detalle** de expediente con la historia completa (campo XML `Historia`).
 - **Alta manual** de registros nuevos.
-- **Importación CSV** por arrastrar-y-soltar con plantilla descargable.
+- **Importación CSV con mapeo de columnas**: asistente en 3 pasos — subir archivo (arrastrar y soltar), mapear cada columna del CSV a los campos del sistema (con auto-sugerencia y valor de ejemplo), y confirmar con una vista previa de los primeros registros ya mapeados antes de importar. Incluye plantilla descargable.
 - **Login simple** con usuarios propios (JWT en cookie httpOnly).
 - **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
 - **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `dbo.google`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
@@ -97,17 +97,24 @@ Reglas de seguridad:
 
 ## CSV de importación
 
-Columnas (pueden estar en español o inglés, sin distinción de mayúsculas):
+Al entrar a `/expedientes/importar` el asistente guía el proceso en 3 pasos:
+
+1. **Subir el archivo** (arrastrar y soltar o clic) — se analiza y se muestran las columnas detectadas y el total de registros.
+2. **Mapear columnas** — para cada campo del sistema se elige qué columna del CSV le corresponde (con auto-sugerencia por nombre y el valor de la primera fila como ejemplo). Los campos sin columna se pueden dejar en "No importar".
+3. **Confirmar** — se muestra una vista previa con los primeros registros del archivo ya mapeados a los campos del sistema; recién ahí se presiona "Confirmar e importar".
+
+Columnas del archivo (pueden estar en español o inglés, sin distinción de mayúsculas, y los encabezados no necesitan coincidir con los de la plantilla porque el mapeo es manual):
 
 ```
 Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado,Caratula,Historia
 ```
 
-- Solo `Expdte` es obligatoria.
+- Solo `Expdte` es obligatoria y debe mapearse a alguna columna.
 - `Caratula` vacía se genera automáticamente como `Actor C/ Demandado`.
 - El campo `Documento` se ignora (en la vista proviene de `ExpdtesLineas`, no de `ExpdtesCaratula`).
 - `Fecha` y `Fecha Procesado` se aceptan como `dd/mm/aaaa` o `aaaa-mm-dd`.
 - El archivo se puede obtener desde la propia app (botón "Descargar plantilla" en `/expedientes/importar`).
+- Se aceptan tanto `;` como `,` como separador de columnas, y archivos con BOM (UTF-8 con firma, como exporta Excel).
 
 ## Carga de registros (mapeo)
 
@@ -142,9 +149,11 @@ app/
   provincias/               → maestros: provincias
   api/auth/                 → login, logout, me
   api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
-  api/expedientes/import/   → importación CSV
+  api/expedientes/import/   → importación CSV (POST) y análisis de archivo (preview)
   api/expedientes/cargados/ → auditoría de cargas (app_expedientes)
   api/expedientes/kpis/     → indicadores del dashboard (totales, estados, documento)
+  api/expedientes/charts/   → datos para gráficos (estados, documentos, por mes)
+  api/expedientes/export/   → exportación CSV/PDF del listado filtrado
   api/usuarios/             → gestión de usuarios y roles (ADMIN)
   api/centros/              → CRUD de CentrosJudiciales
   api/provincias/           → CRUD de Provincias
@@ -179,7 +188,8 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 | GET | `/api/expedientes/[expdte]` | Detalle de un expediente (`?centro=&unidad=` para desambiguar) |
 | POST | `/api/expedientes/nuevo` | Alta manual (inserta en `dbo.ExpdtesCaratula` + auditoría) |
 | GET | `/api/expedientes/cargados` | Auditoría de cargas (`app_expedientes`, mismos filtros + `origen`) |
-| POST | `/api/expedientes/import` | Importación CSV (inserta en `dbo.ExpdtesCaratula`) |
+| POST | `/api/expedientes/import` | Importación CSV (inserta en `dbo.ExpdtesCaratula`). Opcional: campo `mapping` (JSON `{campo: columna}`) |
+| POST | `/api/expedientes/import/preview` | Analiza un CSV y devuelve columnas, total y primeras filas (solo lectura) |
 | GET | `/api/usuarios` | Listar usuarios (**ADMIN**) |
 | POST | `/api/usuarios` | Crear usuario (**ADMIN**) |
 | PUT | `/api/usuarios/[id]` | Editar nombre/rol/contraseña (**ADMIN**) |

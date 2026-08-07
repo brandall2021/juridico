@@ -33,12 +33,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se encontraron registros válidos en el CSV", errors }, { status: 400 });
     }
 
-    const { insertados, errores } = await insertarEnCaratula(records, session!.id, "CSV");
+    const { insertados, errores, duplicados } = await insertarEnCaratula(records, session!.id, "CSV");
 
     return NextResponse.json({
       ok: true,
       totalLeidos: records.length,
       insertados,
+      duplicados,
       errores: [...errors, ...errores],
     });
   } catch (err: any) {

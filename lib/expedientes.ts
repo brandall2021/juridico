@@ -41,7 +41,7 @@ export async function insertarEnCaratula(
   rows: CargaInput[],
   creadoPor: number,
   origen: "MANUAL" | "CSV"
-): Promise<{ insertados: number; errores: string[] }> {
+): Promise<{ insertados: number; errores: string[]; duplicados: number }> {
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
   await tx.begin();
@@ -54,6 +54,7 @@ export async function insertarEnCaratula(
 
     const insertados: string[] = [];
     const errores: string[] = [];
+    let duplicados = 0;
 
     for (const r of rows) {
       const expdte = (r.expdte ?? "").trim();
@@ -61,6 +62,17 @@ export async function insertarEnCaratula(
         if (!expdte) throw new Error("falta el expediente");
         if (expdte.length > 15) throw new Error("expediente supera 15 caracteres");
         if ((r.estado ?? "").trim().length > 2) throw new Error("estado supera 2 caracteres");
+
+        const existente = await tx
+          .request()
+          .input("nro", sql.VarChar, expdte)
+          .query(
+            "SELECT 1 FROM dbo.ExpdtesCaratula WHERE RTRIM(ExpdteNro) = RTRIM(@nro)"
+          );
+        if (existente.recordset[0]) {
+          duplicados++;
+          throw new Error("ya existe un expediente con ese número en la base");
+        }
 
         const cj = await tx
           .request()
@@ -142,7 +154,7 @@ export async function insertarEnCaratula(
     }
 
     await tx.commit();
-    return { insertados: insertados.length, errores };
+    return { insertados: insertados.length, errores, duplicados };
   } catch (e) {
     await tx.rollback();
     throw e;

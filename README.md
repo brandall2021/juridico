@@ -100,20 +100,21 @@ Reglas de seguridad:
 Al entrar a `/expedientes/importar` el asistente guía el proceso en 3 pasos:
 
 1. **Subir el archivo** (arrastrar y soltar o clic) — se analiza y se muestran las columnas detectadas y el total de registros.
-2. **Mapear columnas** — para cada campo del sistema se elige qué columna del CSV le corresponde (con auto-sugerencia por nombre y el valor de la primera fila como ejemplo). Los campos sin columna se pueden dejar en "No importar".
+2. **Mapear columnas** — para cada campo importable se elige qué columna del CSV le corresponde (con auto-sugerencia por nombre y el valor de la primera fila como ejemplo). Los campos sin columna se pueden dejar en "No importar".
 3. **Confirmar** — se muestra una vista previa con los primeros registros del archivo ya mapeados a los campos del sistema; recién ahí se presiona "Confirmar e importar".
+
+Solo se importan **Centro Judicial, Unidad Judicial, Expdte, Actor y Demandado**; los demás campos del archivo se ignoran (la `Carátula` se genera automáticamente).
 
 Columnas del archivo (pueden estar en español o inglés, sin distinción de mayúsculas, y los encabezados no necesitan coincidir con los de la plantilla porque el mapeo es manual):
 
 ```
-Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado,Caratula,Historia
+Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado
 ```
 
 - Solo `Expdte` es obligatoria y debe mapearse a alguna columna.
 - **No se insertan duplicados**: antes de importar se verifica en `dbo.ExpdtesCaratula` si ya existe un expediente con ese número (mismo comportamiento en la carga manual); los que ya existen se saltan y se cuentan como "duplicados".
 - `Caratula` vacía se genera automáticamente como `Actor C/ Demandado`.
-- El campo `Documento` se ignora (en la vista proviene de `ExpdtesLineas`, no de `ExpdtesCaratula`).
-- `Fecha` y `Fecha Procesado` se aceptan como `dd/mm/aaaa` o `aaaa-mm-dd`.
+- Los campos `Documento`, `Fecha`, `Descripcion`, `Fecha Procesado`, `Estado`, `Caratula` e `Historia` del archivo no se importan.
 - El archivo se puede obtener desde la propia app (botón "Descargar plantilla" en `/expedientes/importar`).
 - Se aceptan tanto `;` como `,` como separador de columnas, y archivos con BOM (UTF-8 con firma, como exporta Excel).
 

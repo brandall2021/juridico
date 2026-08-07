@@ -22,7 +22,7 @@ type Preview = {
 };
 
 const TEMPLATE_HEADER =
-  "Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,Fecha,Descripcion,Documento,Fecha Procesado,Estado,Caratula,Historia";
+  "Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado";
 
 const MAP_FIELDS: { key: string; label: string; required?: boolean; wide?: boolean; hints: string[] }[] = [
   { key: "expdte", label: "Expediente", required: true, hints: ["expdte", "expediente", "nro", "numero"] },
@@ -30,12 +30,6 @@ const MAP_FIELDS: { key: string; label: string; required?: boolean; wide?: boole
   { key: "unidadJudicial", label: "Unidad Judicial", hints: ["unidad judicial", "unidad_judicial", "unidadjudicial", "unidad"] },
   { key: "actor", label: "Actor", hints: ["actor"] },
   { key: "demandado", label: "Demandado", hints: ["demandado"] },
-  { key: "fecha", label: "Fecha", hints: ["fecha", "fecha ultimo movimiento", "ultimo movimiento"] },
-  { key: "descripcion", label: "Descripción", hints: ["descripcion", "descripcion ultimo movimiento", "ultimo movimiento descripcion"] },
-  { key: "fechaProcesado", label: "Fecha Procesado", hints: ["fecha procesado", "fecha_procesado", "fechaprocesado", "procesado"] },
-  { key: "estado", label: "Estado", hints: ["estado", "actualizado"] },
-  { key: "caratula", label: "Carátula", hints: ["caratula", "carátula"] },
-  { key: "historia", label: "Historia (XML, opcional)", wide: true, hints: ["historia", "legajo"] },
 ];
 
 function sugerir(cols: string[], hints: string[]): string {
@@ -45,6 +39,7 @@ function sugerir(cols: string[], hints: string[]): string {
 
 export default function ImportarPage() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -70,6 +65,7 @@ export default function ImportarPage() {
     setLoading(true);
     setResultado(null);
     setPreview(null);
+    setSelectedFile(file);
     setFileName(file.name);
 
     const formData = new FormData();
@@ -100,12 +96,13 @@ export default function ImportarPage() {
     setPreview(null);
     setMapping({});
     setResultado(null);
+    setSelectedFile(null);
     setFileName("");
     if (fileRef.current) fileRef.current.value = "";
   }
 
   async function importar() {
-    const file = fileRef.current?.files?.[0];
+    const file = selectedFile;
     if (!file) return;
 
     const mapKeys = MAP_FIELDS.filter((f) => mapping[f.key]).map((f) => f.key);
@@ -146,9 +143,12 @@ export default function ImportarPage() {
           <h3 style={{ fontSize: 16 }}>Importar CSV</h3>
           <p className="muted" style={{ marginTop: 4 }}>
             Subí el archivo, elegí qué columna del CSV corresponde a cada campo del registro y
-            presioná <em>Importar</em>. Solo <code>Expediente</code> es obligatoria;{" "}
-            <code>Carátula</code> vacía se genera como <em>Actor C/ Demandado</em>. El campo{" "}
-            <code>Documento</code> se ignora.
+            presioná <em>Confirmar e importar</em>. Solo <code>Expediente</code> es obligatoria. Se
+            importan <code>Centro Judicial</code>, <code>Unidad Judicial</code>,{" "}
+            <code>Expediente</code>, <code>Actor</code> y <code>Demandado</code>; la{" "}
+            <code>Carátula</code> se genera automáticamente como <em>Actor C/ Demandado</em>. Los
+            campos <code>Fecha</code>, <code>Descripción</code>, <code>Fecha Procesado</code>,{" "}
+            <code>Estado</code>, <code>Carátula</code> e <code>Historia</code> no se importan.
           </p>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={descargarPlantilla}>
             Descargar plantilla

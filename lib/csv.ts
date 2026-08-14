@@ -3,6 +3,7 @@ import { parse } from "csv-parse";
 export type ExpedienteInput = {
   centroJudicial: string | null;
   unidadJudicial: string | null;
+  cenJudId: string | null;
   expdte: string | null;
   actor: string | null;
   demandado: string | null;
@@ -11,6 +12,8 @@ export type ExpedienteInput = {
   documento: string | null;
   fechaProcesado: string | null;
   estado: string | null;
+  estadoProcesal: string | null;
+  estadoProcesalNombre: string | null;
   caratula: string | null;
   historia: string | null;
 };
@@ -21,12 +24,15 @@ export const IMPORT_FIELDS: (keyof ExpedienteInput)[] = [
   "expdte",
   "centroJudicial",
   "unidadJudicial",
+  "cenJudId",
   "actor",
   "demandado",
   "fecha",
   "descripcion",
   "fechaProcesado",
   "estado",
+  "estadoProcesal",
+  "estadoProcesalNombre",
   "caratula",
   "historia",
 ];
@@ -40,6 +46,13 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   unidadjudicial: "unidadJudicial",
   expdte: "expdte",
   expediente: "expdte",
+  expdtecenjudid: "cenJudId",
+  cenjudid: "cenJudId",
+  centrojudicialid: "cenJudId",
+  "centro judicial id": "cenJudId",
+  "id centro": "cenJudId",
+  idcentro: "cenJudId",
+  "id centro judicial": "cenJudId",
   actor: "actor",
   demandado: "demandado",
   fecha: "fecha",
@@ -49,6 +62,15 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   "fecha_procesado": "fechaProcesado",
   fechaprocesado: "fechaProcesado",
   estado: "estado",
+  expdteestado: "estadoProcesal",
+  "estado procesal": "estadoProcesal",
+  estadoprocesal: "estadoProcesal",
+  "estado del expediente": "estadoProcesal",
+  expdteestadonombre: "estadoProcesalNombre",
+  estadonombre: "estadoProcesalNombre",
+  "estado procesal nombre": "estadoProcesalNombre",
+  "nombre estado": "estadoProcesalNombre",
+  nombreestado: "estadoProcesalNombre",
   caratula: "caratula",
   "carátula": "caratula",
   historia: "historia",
@@ -108,6 +130,7 @@ export async function parseCsv(
   const records: ExpedienteInput[] = rows.map((row) => ({
     centroJudicial: pick("centroJudicial", row),
     unidadJudicial: pick("unidadJudicial", row),
+    cenJudId: pick("cenJudId", row),
     expdte: pick("expdte", row),
     actor: pick("actor", row),
     demandado: pick("demandado", row),
@@ -116,6 +139,8 @@ export async function parseCsv(
     documento: pick("documento", row),
     fechaProcesado: pick("fechaProcesado", row),
     estado: pick("estado", row),
+    estadoProcesal: pick("estadoProcesal", row),
+    estadoProcesalNombre: pick("estadoProcesalNombre", row),
     caratula: pick("caratula", row),
     historia: pick("historia", row),
   }));

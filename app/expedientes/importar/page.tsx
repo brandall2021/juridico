@@ -22,14 +22,17 @@ type Preview = {
 };
 
 const TEMPLATE_HEADER =
-  "Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado";
+  "Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,ExpdteCenJudId,ExpdteEstado,ExpdteEstadoNombre";
 
 const MAP_FIELDS: { key: string; label: string; required?: boolean; wide?: boolean; hints: string[] }[] = [
   { key: "expdte", label: "Expediente", required: true, hints: ["expdte", "expediente", "nro", "numero"] },
   { key: "centroJudicial", label: "Centro Judicial", hints: ["centro judicial", "centro_judicial", "centrojudicial", "centro"] },
   { key: "unidadJudicial", label: "Unidad Judicial", hints: ["unidad judicial", "unidad_judicial", "unidadjudicial", "unidad"] },
+  { key: "cenJudId", label: "ID Centro Judicial", hints: ["expdtecenjudid", "cenjudid", "centrojudicialid", "id centro", "idcentro"] },
   { key: "actor", label: "Actor", hints: ["actor"] },
   { key: "demandado", label: "Demandado", hints: ["demandado"] },
+  { key: "estadoProcesal", label: "Estado procesal (ExpdteEstado)", hints: ["expdteestado", "estado procesal", "estadoprocesal", "estado del expediente"] },
+  { key: "estadoProcesalNombre", label: "Nombre del estado (ExpdteEstadoNombre)", hints: ["expdteestadonombre", "estadonombre", "estado procesal nombre", "nombre estado", "nombreestado"] },
 ];
 
 function sugerir(cols: string[], hints: string[]): string {
@@ -144,11 +147,15 @@ export default function ImportarPage() {
           <p className="muted" style={{ marginTop: 4 }}>
             Subí el archivo, elegí qué columna del CSV corresponde a cada campo del registro y
             presioná <em>Confirmar e importar</em>. Solo <code>Expediente</code> es obligatoria. Se
-            importan <code>Centro Judicial</code>, <code>Unidad Judicial</code>,{" "}
-            <code>Expediente</code>, <code>Actor</code> y <code>Demandado</code>; la{" "}
-            <code>Carátula</code> se genera automáticamente como <em>Actor C/ Demandado</em>. Los
-            campos <code>Fecha</code>, <code>Descripción</code>, <code>Fecha Procesado</code>,{" "}
-            <code>Estado</code>, <code>Carátula</code> e <code>Historia</code> no se importan.
+            importan <code>Centro Judicial</code> (por nombre o directamente por{" "}
+            <code>ExpdteCenJudId</code>), <code>Unidad Judicial</code>, <code>Expediente</code>,{" "}
+            <code>Actor</code>, <code>Demandado</code> y los estados{" "}
+            <code>ExpdteEstado</code> (ej. <em>ACT</em>) y <code>ExpdteEstadoNombre</code> (ej.{" "}
+            <em>ACTIVO</em>); la <code>Carátula</code> se genera automáticamente como{" "}
+            <em>Actor C/ Demandado</em>. Los campos <code>Fecha</code>,{" "}
+            <code>Descripción</code>, <code>Fecha Procesado</code>, <code>Carátula</code> e{" "}
+            <code>Historia</code> no se importan. Si el archivo tiene una columna{" "}
+            <code>Estado</code> (SI/NO/KO) se guarda automáticamente como "actualizado".
           </p>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={descargarPlantilla}>
             Descargar plantilla

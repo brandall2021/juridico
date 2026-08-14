@@ -46,10 +46,31 @@ BEGIN
     documento VARCHAR(300) NULL,
     fecha_procesado NVARCHAR(4000) NULL,
     estado VARCHAR(2) NULL,
+    estado_procesal VARCHAR(3) NULL,
+    estado_procesal_nombre VARCHAR(10) NULL,
+    cen_jud_id NUMERIC NULL,
     origen VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
     creado_por INT NULL,
     real_id NUMERIC NULL,
     creado_en DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
   );
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'app_expedientes' AND COLUMN_NAME = 'cen_jud_id')
+BEGIN
+  ALTER TABLE dbo.app_expedientes ADD cen_jud_id NUMERIC NULL;
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'app_expedientes' AND COLUMN_NAME = 'estado_procesal')
+BEGIN
+  ALTER TABLE dbo.app_expedientes ADD estado_procesal VARCHAR(3) NULL;
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'app_expedientes' AND COLUMN_NAME = 'estado_procesal_nombre')
+BEGIN
+  ALTER TABLE dbo.app_expedientes ADD estado_procesal_nombre VARCHAR(10) NULL;
 END
 GO

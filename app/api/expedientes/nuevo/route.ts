@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 const CAMPOS: (keyof CargaInput)[] = [
   "centroJudicial",
   "unidadJudicial",
+  "cenJudId",
   "expdte",
   "actor",
   "demandado",
@@ -15,6 +16,8 @@ const CAMPOS: (keyof CargaInput)[] = [
   "documento",
   "fechaProcesado",
   "estado",
+  "estadoProcesal",
+  "estadoProcesalNombre",
   "caratula",
   "historia",
 ];
@@ -33,6 +36,7 @@ export async function POST(req: NextRequest) {
     const carga: CargaInput = {
       centroJudicial: body.centroJudicial ? String(body.centroJudicial) : null,
       unidadJudicial: body.unidadJudicial ? String(body.unidadJudicial) : null,
+      cenJudId: body.cenJudId ? String(body.cenJudId) : null,
       expdte,
       actor: body.actor ? String(body.actor) : null,
       demandado: body.demandado ? String(body.demandado) : null,
@@ -41,6 +45,8 @@ export async function POST(req: NextRequest) {
       documento: body.documento ? String(body.documento) : null,
       fechaProcesado: body.fechaProcesado ? String(body.fechaProcesado) : null,
       estado: body.estado ? String(body.estado) : null,
+      estadoProcesal: body.estadoProcesal ? String(body.estadoProcesal) : null,
+      estadoProcesalNombre: body.estadoProcesalNombre ? String(body.estadoProcesalNombre) : null,
       caratula: body.caratula ? String(body.caratula) : null,
       historia: body.historia ? String(body.historia) : null,
     };

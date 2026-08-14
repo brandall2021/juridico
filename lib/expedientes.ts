@@ -3,6 +3,7 @@ import sql, { getPool, execute } from "@/lib/db";
 export type CargaInput = {
   centroJudicial: string | null;
   unidadJudicial: string | null;
+  cenJudId: string | null;
   expdte: string | null;
   actor: string | null;
   demandado: string | null;
@@ -11,6 +12,8 @@ export type CargaInput = {
   documento: string | null;
   fechaProcesado: string | null;
   estado: string | null;
+  estadoProcesal: string | null;
+  estadoProcesalNombre: string | null;
   caratula?: string | null;
   historia?: string | null;
 };
@@ -93,6 +96,9 @@ export async function insertarEnCaratula(
         if (!expdte) throw new Error("falta el expediente");
         if (expdte.length > 15) throw new Error("expediente supera 15 caracteres");
         if ((r.estado ?? "").trim().length > 2) throw new Error("estado supera 2 caracteres");
+        if ((r.estadoProcesal ?? "").trim().length > 3) throw new Error("estado procesal supera 3 caracteres");
+        if ((r.estadoProcesalNombre ?? "").trim().length > 10)
+          throw new Error("estado procesal nombre supera 10 caracteres");
 
         const existente = await tx
           .request()
@@ -105,21 +111,45 @@ export async function insertarEnCaratula(
           throw new Error("ya existe un expediente con ese número en la base");
         }
 
-        const cj = await tx
-          .request()
-          .input("nombre", sql.VarChar, (r.centroJudicial ?? "").trim())
-          .input("unidad", sql.VarChar, (r.unidadJudicial ?? "").trim())
-          .query(
-            "SELECT TOP 1 CentroJudId, CentroJudPvciaId FROM dbo.CentrosJudiciales WHERE RTRIM(CentroJudNombre) = RTRIM(@nombre) AND RTRIM(CentroJudUnidad) = RTRIM(@unidad)"
-          );
-        if (!cj.recordset[0]) {
-          throw new Error(`centro judicial no encontrado: "${r.centroJudicial ?? ""}" / "${r.unidadJudicial ?? ""}"`);
+        const cenJudIdRaw = (r.cenJudId ?? "").trim();
+        let cenJud: { CentroJudId: number; CentroJudPvciaId: string };
+        if (cenJudIdRaw) {
+          const idNum = Number(cenJudIdRaw);
+          if (isNaN(idNum)) throw new Error(`ID de centro judicial inválido: "${cenJudIdRaw}"`);
+          const cj = await tx
+            .request()
+            .input("id", sql.Numeric, idNum)
+            .query(
+              "SELECT TOP 1 CentroJudId, CentroJudPvciaId FROM dbo.CentrosJudiciales WHERE CentroJudId = @id"
+            );
+          if (!cj.recordset[0]) {
+            throw new Error(`centro judicial no encontrado: ID ${cenJudIdRaw}`);
+          }
+          cenJud = {
+            CentroJudId: Number(cj.recordset[0].CentroJudId),
+            CentroJudPvciaId: String(cj.recordset[0].CentroJudPvciaId),
+          };
+        } else {
+          const cj = await tx
+            .request()
+            .input("nombre", sql.VarChar, (r.centroJudicial ?? "").trim())
+            .input("unidad", sql.VarChar, (r.unidadJudicial ?? "").trim())
+            .query(
+              "SELECT TOP 1 CentroJudId, CentroJudPvciaId FROM dbo.CentrosJudiciales WHERE RTRIM(CentroJudNombre) = RTRIM(@nombre) AND RTRIM(CentroJudUnidad) = RTRIM(@unidad)"
+            );
+          if (!cj.recordset[0]) {
+            throw new Error(`centro judicial no encontrado: "${r.centroJudicial ?? ""}" / "${r.unidadJudicial ?? ""}"`);
+          }
+          cenJud = {
+            CentroJudId: Number(cj.recordset[0].CentroJudId),
+            CentroJudPvciaId: String(cj.recordset[0].CentroJudPvciaId),
+          };
         }
-        const cenJudId = Number(cj.recordset[0].CentroJudId);
+        const cenJudId = cenJud.CentroJudId;
 
         const pv = await tx
           .request()
-          .input("pvid", sql.NChar, String(cj.recordset[0].CentroJudPvciaId))
+          .input("pvid", sql.NChar, cenJud.CentroJudPvciaId)
           .query("SELECT TOP 1 RTRIM(ProvinciaNombre) AS nom FROM dbo.Provincias WHERE ProvinciaId = @pvid");
         const provincia = pv.recordset[0]?.nom || "Tucumán";
 
@@ -143,21 +173,24 @@ export async function insertarEnCaratula(
           .input("legajo", sql.Xml, legajo)
           .input("actualizado", sql.VarChar, (r.estado ?? "").trim() || null)
           .input("fUltProc", sql.Date, parseFecha(r.fechaProcesado))
+          .input("estadoProc", sql.Char(3), (r.estadoProcesal ?? "").trim() || null)
+          .input("estadoProcNombre", sql.NChar(10), (r.estadoProcesalNombre ?? "").trim() || null)
           .query(
             `INSERT INTO dbo.ExpdtesCaratula
               (ExpdteId, ExpdteCenJudId, ExpdteUnidadJud, ExpdteProvinciaNombre, ExpdteNro,
                ExpdteCaratula, ExpdteActor, ExpdteDemandado, ExpdteFchUltMov, ExpdteUltMovDescripcion,
-               ExpdteLegajo, ExpdteActualizado, ExpdteFchUltProc)
+               ExpdteLegajo, ExpdteActualizado, ExpdteFchUltProc, ExpdteEstado, ExpdteEstadoNombre)
              VALUES
               (@id, @cenJudId, @unidadJud, @provincia, @nro,
                @caratula, @actor, @demandado, @fUltMov, @desc,
-               @legajo, @actualizado, @fUltProc)`
+               @legajo, @actualizado, @fUltProc, @estadoProc, @estadoProcNombre)`
           );
 
         await tx
           .request()
           .input("realId", sql.Numeric, nextId)
           .input("expdte", sql.VarChar, expdte)
+          .input("cenJudId", sql.Numeric, cenJudId)
           .input("centro", sql.VarChar, (r.centroJudicial ?? "").trim() || null)
           .input("unidad", sql.VarChar, (r.unidadJudicial ?? "").trim() || null)
           .input("actor2", sql.VarChar, (r.actor ?? "").trim() || null)
@@ -166,15 +199,17 @@ export async function insertarEnCaratula(
           .input("desc", sql.VarChar, (r.descripcion ?? "").trim() || null)
           .input("fechaProc", sql.NVarChar, (r.fechaProcesado ?? "").trim() || null)
           .input("estado", sql.VarChar, (r.estado ?? "").trim() || null)
+          .input("estadoProc", sql.VarChar, (r.estadoProcesal ?? "").trim() || null)
+          .input("estadoProcNombre", sql.VarChar, (r.estadoProcesalNombre ?? "").trim() || null)
           .input("origen", sql.VarChar, origen)
           .input("creadoPor", sql.Int, creadoPor)
           .query(
             `INSERT INTO dbo.app_expedientes
               (centro_judicial, unidad_judicial, expdte, actor, demandado, fecha, descripcion,
-               fecha_procesado, estado, origen, creado_por, real_id)
+               fecha_procesado, estado, estado_procesal, estado_procesal_nombre, cen_jud_id, origen, creado_por, real_id)
              VALUES
               (@centro, @unidad, @expdte, @actor2, @demandado2, @fecha, @desc,
-               @fechaProc, @estado, @origen, @creadoPor, @realId)`
+               @fechaProc, @estado, @estadoProc, @estadoProcNombre, @cenJudId, @origen, @creadoPor, @realId)`
           );
 
         insertados.push(expdte);

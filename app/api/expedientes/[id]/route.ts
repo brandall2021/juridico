@@ -35,6 +35,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
     return NextResponse.json(rows[0]);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

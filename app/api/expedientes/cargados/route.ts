@@ -60,6 +60,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ total, page, pageSize, rows });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

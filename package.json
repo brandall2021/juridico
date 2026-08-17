@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@types/pdfkit": "^0.17.6",
     "bcryptjs": "^2.4.3",
     "csv-parse": "^5.6.0",
     "jsonwebtoken": "^9.0.2",
@@ -22,9 +21,11 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/mssql": "^12.3.0",
     "@types/node": "^20.19.0",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.5",
     "typescript": "^5.7.3"

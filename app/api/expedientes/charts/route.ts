@@ -32,10 +32,10 @@ export async function GET(req: NextRequest) {
          FROM dbo.google GROUP BY CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 'Con documento' ELSE 'Sin documento' END`
       ),
       query<{ mes: string; total: number }>(
-        `SELECT FORMAT(${FECHA_FP}, 'yyyy-MM') AS mes, COUNT(*) AS total
+        `SELECT CONVERT(VARCHAR(7), ${FECHA_FP}, 120) AS mes, COUNT(*) AS total
          FROM dbo.google
          WHERE ${FECHA_FP} IS NOT NULL
-         GROUP BY FORMAT(${FECHA_FP}, 'yyyy-MM')`
+         GROUP BY CONVERT(VARCHAR(7), ${FECHA_FP}, 120)`
       ),
     ]);
 
@@ -44,6 +44,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ estados, documentos, porMes });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

@@ -90,6 +90,38 @@ export async function insertarEnCaratula(
     const errores: string[] = [];
     let duplicados = 0;
 
+    // Pre-fetch all existing expediente numbers for batch duplicate check
+    const existingNums = new Set<string>();
+    const existingRows = await tx
+      .request()
+      .query("SELECT ExpdteNro FROM dbo.ExpdtesCaratula");
+    for (const row of existingRows.recordset) {
+      existingNums.add(String(row.ExpdteNro).trim());
+    }
+
+    // Pre-fetch all CentrosJudiciales into Maps
+    const centroById = new Map<number, { CentroJudId: number; CentroJudPvciaId: string }>();
+    const centroByName = new Map<string, { CentroJudId: number; CentroJudPvciaId: string }>();
+    const centros = await tx
+      .request()
+      .query("SELECT CentroJudId, CentroJudNombre, CentroJudUnidad, CentroJudPvciaId FROM dbo.CentrosJudiciales");
+    for (const c of centros.recordset) {
+      const id = Number(c.CentroJudId);
+      const pvId = String(c.CentroJudPvciaId);
+      const entry = { CentroJudId: id, CentroJudPvciaId: pvId };
+      centroById.set(id, entry);
+      centroByName.set(`${String(c.CentroJudNombre).trim()}|${String(c.CentroJudUnidad).trim()}`, entry);
+    }
+
+    // Pre-fetch all Provincias into Map
+    const provinciaMap = new Map<string, string>();
+    const provincias = await tx
+      .request()
+      .query("SELECT ProvinciaId, RTRIM(ProvinciaNombre) AS nom FROM dbo.Provincias");
+    for (const p of provincias.recordset) {
+      provinciaMap.set(String(p.ProvinciaId).trim(), String(p.nom));
+    }
+
     for (const r of rows) {
       const expdte = (r.expdte ?? "").trim();
       try {
@@ -100,58 +132,28 @@ export async function insertarEnCaratula(
         if ((r.estadoProcesalNombre ?? "").trim().length > 10)
           throw new Error("estado procesal nombre supera 10 caracteres");
 
-        const existente = await tx
-          .request()
-          .input("nro", sql.VarChar, expdte)
-          .query(
-            "SELECT 1 FROM dbo.ExpdtesCaratula WHERE RTRIM(ExpdteNro) = RTRIM(@nro)"
-          );
-        if (existente.recordset[0]) {
+        if (existingNums.has(expdte)) {
           duplicados++;
           throw new Error("ya existe un expediente con ese número en la base");
         }
 
         const cenJudIdRaw = (r.cenJudId ?? "").trim();
-        let cenJud: { CentroJudId: number; CentroJudPvciaId: string };
+        let cenJud: { CentroJudId: number; CentroJudPvciaId: string } | undefined;
         if (cenJudIdRaw) {
           const idNum = Number(cenJudIdRaw);
           if (isNaN(idNum)) throw new Error(`ID de centro judicial inválido: "${cenJudIdRaw}"`);
-          const cj = await tx
-            .request()
-            .input("id", sql.Numeric, idNum)
-            .query(
-              "SELECT TOP 1 CentroJudId, CentroJudPvciaId FROM dbo.CentrosJudiciales WHERE CentroJudId = @id"
-            );
-          if (!cj.recordset[0]) {
-            throw new Error(`centro judicial no encontrado: ID ${cenJudIdRaw}`);
-          }
-          cenJud = {
-            CentroJudId: Number(cj.recordset[0].CentroJudId),
-            CentroJudPvciaId: String(cj.recordset[0].CentroJudPvciaId),
-          };
+          cenJud = centroById.get(idNum);
+          if (!cenJud) throw new Error(`centro judicial no encontrado: ID ${cenJudIdRaw}`);
         } else {
-          const cj = await tx
-            .request()
-            .input("nombre", sql.VarChar, (r.centroJudicial ?? "").trim())
-            .input("unidad", sql.VarChar, (r.unidadJudicial ?? "").trim())
-            .query(
-              "SELECT TOP 1 CentroJudId, CentroJudPvciaId FROM dbo.CentrosJudiciales WHERE RTRIM(CentroJudNombre) = RTRIM(@nombre) AND RTRIM(CentroJudUnidad) = RTRIM(@unidad)"
-            );
-          if (!cj.recordset[0]) {
+          const key = `${(r.centroJudicial ?? "").trim()}|${(r.unidadJudicial ?? "").trim()}`;
+          cenJud = centroByName.get(key);
+          if (!cenJud) {
             throw new Error(`centro judicial no encontrado: "${r.centroJudicial ?? ""}" / "${r.unidadJudicial ?? ""}"`);
           }
-          cenJud = {
-            CentroJudId: Number(cj.recordset[0].CentroJudId),
-            CentroJudPvciaId: String(cj.recordset[0].CentroJudPvciaId),
-          };
         }
         const cenJudId = cenJud.CentroJudId;
 
-        const pv = await tx
-          .request()
-          .input("pvid", sql.NChar, cenJud.CentroJudPvciaId)
-          .query("SELECT TOP 1 RTRIM(ProvinciaNombre) AS nom FROM dbo.Provincias WHERE ProvinciaId = @pvid");
-        const provincia = pv.recordset[0]?.nom || "Tucumán";
+        const provincia = provinciaMap.get(cenJud.CentroJudPvciaId) || "Tucumán";
 
         const caratula = (r.caratula ?? "").trim() || caratulaAuto(r);
         if (caratula.length > 200) throw new Error("carátula supera 200 caracteres");
@@ -213,6 +215,7 @@ export async function insertarEnCaratula(
           );
 
         insertados.push(expdte);
+        existingNums.add(expdte);
         nextId++;
       } catch (e: any) {
         errores.push(`Expediente "${expdte}": ${e.message}`);

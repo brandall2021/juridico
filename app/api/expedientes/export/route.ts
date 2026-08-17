@@ -145,9 +145,12 @@ export async function GET(req: NextRequest) {
     const { where, params } = buildWhere(url.searchParams);
     const order = orderBy(url.searchParams);
 
+    const formato = url.searchParams.get("formato") === "pdf" ? "pdf" : "csv";
+    const maxRows = formato === "csv" ? CSV_MAX : PDF_MAX;
+
     const rows = await query(
-      `SELECT ${VISTA_FIELDS.join(", ")} FROM dbo.google ${where} ORDER BY ${order}`,
-      params
+      `SELECT TOP (@maxRows) ${VISTA_FIELDS.join(", ")} FROM dbo.google ${where} ORDER BY ${order}`,
+      { ...params, maxRows }
     );
 
     if (formato === "csv") {
@@ -171,6 +174,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

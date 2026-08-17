@@ -74,3 +74,40 @@ BEGIN
   ALTER TABLE dbo.app_expedientes ADD estado_procesal_nombre VARCHAR(10) NULL;
 END
 GO
+
+-- Performance indexes
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_app_expedientes_expdte' AND object_id = OBJECT_ID('dbo.app_expedientes'))
+BEGIN
+  CREATE INDEX IX_app_expedientes_expdte ON dbo.app_expedientes(expdte);
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_app_expedientes_origen' AND object_id = OBJECT_ID('dbo.app_expedientes'))
+BEGIN
+  CREATE INDEX IX_app_expedientes_origen ON dbo.app_expedientes(origen);
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_app_expedientes_creado_por' AND object_id = OBJECT_ID('dbo.app_expedientes'))
+BEGIN
+  CREATE INDEX IX_app_expedientes_creado_por ON dbo.app_expedientes(creado_por);
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_app_cargas_creado_por' AND object_id = OBJECT_ID('dbo.app_cargas'))
+BEGIN
+  CREATE INDEX IX_app_cargas_creado_por ON dbo.app_cargas(creado_por);
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_app_cargas_creado_en' AND object_id = OBJECT_ID('dbo.app_cargas'))
+BEGIN
+  CREATE INDEX IX_app_cargas_creado_en ON dbo.app_cargas(creado_en);
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_app_usuarios_username' AND object_id = OBJECT_ID('dbo.app_usuarios'))
+BEGIN
+  CREATE UNIQUE INDEX IX_app_usuarios_username ON dbo.app_usuarios(username);
+END
+GO

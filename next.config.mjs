@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  eslint: { ignoreDuringBuilds: true },
+  eslint: { ignoreDuringBuilds: false },
   experimental: {
     serverComponentsExternalPackages: ["pdfkit"],
     outputFileTracingIncludes: {

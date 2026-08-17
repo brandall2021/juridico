@@ -32,7 +32,7 @@ async function upsertUser(pool, { username, password, nombre, rol }) {
       .query(
         "INSERT INTO dbo.app_usuarios (username, password_hash, nombre, rol) VALUES (@username, @hash, @nombre, @rol)"
       );
-    console.log(`Usuario creado: ${username} / ${password} (${rol})`);
+    console.log(`Usuario creado: ${username} (${rol})`);
   } else {
     await pool
       .request()
@@ -76,7 +76,7 @@ async function main() {
       .query(
         "INSERT INTO dbo.app_usuarios (username, password_hash, nombre, rol) VALUES (@username, @hash, @nombre, 'ADMIN')"
       );
-    console.log(`Usuario admin creado: ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`);
+    console.log(`Usuario admin creado: ${ADMIN_USERNAME}`);
   } else {
     await pool
       .request()

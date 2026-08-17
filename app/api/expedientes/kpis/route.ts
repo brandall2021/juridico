@@ -4,11 +4,20 @@ import { requireAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
+// In-memory cache for KPIs (60 seconds TTL)
+let kpiCache: { data: any; expiresAt: number } | null = null;
+const KPI_CACHE_TTL_MS = 60 * 1000;
+
 export async function GET(req: NextRequest) {
   const { response } = requireAuth(req);
   if (response) return response;
 
   try {
+    const now = Date.now();
+    if (kpiCache && now < kpiCache.expiresAt) {
+      return NextResponse.json(kpiCache.data);
+    }
+
     const [kpis, ult] = await Promise.all([
       query<any>(
         `SELECT
@@ -28,7 +37,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const k = kpis[0] ?? {};
-    return NextResponse.json({
+    const data = {
       total: Number(k.total || 0),
       actualizadosHoy: Number(k.actualizadosHoy || 0),
       conDocumento: Number(k.conDocumento || 0),
@@ -38,8 +47,11 @@ export async function GET(req: NextRequest) {
       estadoKO: Number(k.estadoKO || 0),
       antiguos: Number(k.antiguos || 0),
       ultimaActualizacion: ult[0]?.ultima ?? null,
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    };
+
+    kpiCache = { data, expiresAt: now + KPI_CACHE_TTL_MS };
+    return NextResponse.json(data);
+  } catch {
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

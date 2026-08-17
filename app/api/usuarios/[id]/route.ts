@@ -63,7 +63,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -97,6 +97,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const result = await execute("DELETE FROM dbo.app_usuarios WHERE id = @id", { id });
     return NextResponse.json({ ok: true, eliminados: result.rowsAffected[0] });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
 const COOKIE_NAME = "juridico_token";
 
@@ -75,12 +78,12 @@ export function requireAdmin(req: NextRequest) {
 export const ROLES = ["ADMIN", "USER"] as const;
 export type Rol = (typeof ROLES)[number];
 
-export function hashPassword(plain: string): string {
-  const bcrypt = require("bcryptjs");
-  return bcrypt.hashSync(plain, 10);
+import bcrypt from "bcryptjs";
+
+export async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, 12);
 }
 
-export function comparePassword(plain: string, hash: string): boolean {
-  const bcrypt = require("bcryptjs");
-  return bcrypt.compareSync(plain, hash);
+export async function comparePassword(plain: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(plain, hash);
 }

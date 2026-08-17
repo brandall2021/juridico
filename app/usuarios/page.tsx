@@ -1,9 +1,38 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import AdminGuard from "@/components/AdminGuard";
 import { api } from "@/lib/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Usuario = {
   id: number;
@@ -20,8 +49,9 @@ const emptyForm = { username: "", nombre: "", rol: "USER", password: "" };
 export default function UsuariosPage() {
   const [users, setUsers] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<"nuevo" | null | number>(null); // number = editando id
+  const [modal, setModal] = useState<"nuevo" | null | number>(null);
   const [form, setForm] = useState(emptyForm);
 
   const fetchUsers = useCallback(async () => {
@@ -53,18 +83,16 @@ export default function UsuariosPage() {
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSaving(true);
 
+    let res;
     if (modal === "nuevo") {
-      const { data, error } = await api("/api/usuarios", {
+      res = await api("/api/usuarios", {
         method: "POST",
         body: JSON.stringify(form),
       });
-      if (error || !data) {
-        setError(error || "Error al crear usuario");
-        return;
-      }
     } else if (typeof modal === "number") {
-      const { data, error } = await api(`/api/usuarios/${modal}`, {
+      res = await api(`/api/usuarios/${modal}`, {
         method: "PUT",
         body: JSON.stringify({
           nombre: form.nombre,
@@ -72,10 +100,12 @@ export default function UsuariosPage() {
           password: form.password || undefined,
         }),
       });
-      if (error || !data) {
-        setError(error || "Error al actualizar usuario");
-        return;
-      }
+    }
+
+    setSaving(false);
+    if (res?.error || !res?.data) {
+      setError(res?.error || "Error al guardar usuario");
+      return;
     }
 
     setModal(null);
@@ -96,84 +126,89 @@ export default function UsuariosPage() {
   return (
     <AdminGuard>
       <AppShell>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-          <h2 style={{ fontSize: 18 }}>Usuarios</h2>
-          <button className="btn btn-sm" onClick={abrirNuevo}>
-            + Nuevo usuario
-          </button>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Usuarios</h2>
+            <p className="text-sm text-muted-foreground">Administración de usuarios y roles</p>
+          </div>
+          <Button size="sm" onClick={abrirNuevo}>
+            <Plus size={14} />
+            Nuevo usuario
+          </Button>
         </div>
 
-        {error && <div className="alert error">{error}</div>}
-        {loading && <div className="muted" style={{ padding: 12 }}>Cargando…</div>}
-
-        {!loading && users.length === 0 && <div className="empty">Sin usuarios</div>}
-
-        {users.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Usuario</th>
-                  <th>Nombre</th>
-                  <th>Rol</th>
-                  <th>Creado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td className="mono">{u.username}</td>
-                    <td>{u.nombre}</td>
-                    <td>
-                      <span className={`badge ${u.rol === "ADMIN" ? "warn" : ""}`}>{u.rol}</span>
-                    </td>
-                    <td className="muted">{new Date(u.created_at).toLocaleDateString("es-AR")}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(u)}>
-                          Editar
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => eliminar(u)}>
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {error}
           </div>
         )}
 
-        {modal !== null && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,.6)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 24,
-              zIndex: 50,
-            }}
-            onClick={() => setModal(null)}
-          >
-            <form
-              className="toolbar"
-              style={{ maxWidth: 460, width: "100%", marginBottom: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              onSubmit={guardar}
-            >
-              <h3 style={{ fontSize: 16, marginBottom: 14 }}>
-                {modal === "nuevo" ? "Nuevo usuario" : `Editar usuario (${form.username})`}
-              </h3>
-              <div className="form-grid" style={{ gridTemplateColumns: "1fr", gap: 14 }}>
+        {loading && <div className="py-4 text-sm text-muted-foreground">Cargando…</div>}
+
+        {!loading && users.length === 0 && (
+          <div className="py-16 text-center text-sm text-muted-foreground">Sin usuarios</div>
+        )}
+
+        {users.length > 0 && (
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Rol</TableHead>
+                  <TableHead>Creado</TableHead>
+                  <TableHead className="text-right" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-mono text-xs">{u.username}</TableCell>
+                    <TableCell className="font-medium">{u.nombre}</TableCell>
+                    <TableCell>
+                      <Badge variant={u.rol === "ADMIN" ? "warning" : "secondary"}>{u.rol}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(u.created_at).toLocaleDateString("es-AR")}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => abrirEditar(u)} aria-label="Editar">
+                          <Pencil size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-400 hover:bg-red-500/10 hover:text-red-400"
+                          onClick={() => eliminar(u)}
+                          aria-label="Eliminar"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
+
+        <Dialog open={modal !== null} onOpenChange={(o) => !o && setModal(null)}>
+          <DialogContent className="sm:max-w-md">
+            <form onSubmit={guardar}>
+              <DialogHeader>
+                <DialogTitle>
+                  {modal === "nuevo" ? "Nuevo usuario" : `Editar usuario (${form.username})`}
+                </DialogTitle>
+                <DialogDescription>Administrá los datos de acceso del usuario.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
                 {modal === "nuevo" && (
-                  <div className="field">
-                    <label>Usuario *</label>
-                    <input
+                  <div className="space-y-1.5">
+                    <Label>Usuario *</Label>
+                    <Input
                       value={form.username}
                       onChange={(e) => setForm({ ...form, username: e.target.value })}
                       required
@@ -181,31 +216,33 @@ export default function UsuariosPage() {
                     />
                   </div>
                 )}
-                <div className="field">
-                  <label>Nombre *</label>
-                  <input
+                <div className="space-y-1.5">
+                  <Label>Nombre *</Label>
+                  <Input
                     value={form.nombre}
                     onChange={(e) => setForm({ ...form, nombre: e.target.value })}
                     required
                     maxLength={120}
                   />
                 </div>
-                <div className="field">
-                  <label>Rol *</label>
-                  <select
-                    value={form.rol}
-                    onChange={(e) => setForm({ ...form, rol: e.target.value })}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-1.5">
+                  <Label>Rol *</Label>
+                  <Select value={form.rol} onValueChange={(v) => setForm({ ...form, rol: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="field">
-                  <label>{modal === "nuevo" ? "Contraseña *" : "Contraseña (vacía = no cambiar)"}</label>
-                  <input
+                <div className="space-y-1.5">
+                  <Label>{modal === "nuevo" ? "Contraseña *" : "Contraseña (vacía = no cambiar)"}</Label>
+                  <Input
                     type="password"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -214,17 +251,18 @@ export default function UsuariosPage() {
                   />
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                <button type="submit" className="btn">
-                  Guardar
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setModal(null)}>
                   Cancelar
-                </button>
-              </div>
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving && <Loader2 className="animate-spin" />}
+                  Guardar
+                </Button>
+              </DialogFooter>
             </form>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
       </AppShell>
     </AdminGuard>
   );

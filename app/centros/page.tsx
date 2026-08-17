@@ -1,10 +1,38 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import AuthGuard from "@/components/AuthGuard";
 import AdminGuard from "@/components/AdminGuard";
 import { api } from "@/lib/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Centro = {
   CentroJudId: number;
@@ -25,6 +53,7 @@ export default function CentrosPage() {
   const [provincias, setProvincias] = useState<Provincia[]>([]);
   const [me, setMe] = useState<{ rol: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<"nuevo" | null | number>(null);
   const [form, setForm] = useState(emptyForm);
@@ -71,6 +100,7 @@ export default function CentrosPage() {
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSaving(true);
     const body = {
       nombre: form.nombre,
       provinciaId: form.provinciaId || undefined,
@@ -78,13 +108,14 @@ export default function CentrosPage() {
       sitioWeb: form.sitioWeb || undefined,
       equivEndpoint: form.equivEndpoint || undefined,
     };
+    let res;
     if (modal === "nuevo") {
-      const { data, error } = await api("/api/centros", { method: "POST", body: JSON.stringify(body) });
-      if (error || !data) return setError(error || "Error al crear centro");
+      res = await api("/api/centros", { method: "POST", body: JSON.stringify(body) });
     } else if (typeof modal === "number") {
-      const { data, error } = await api(`/api/centros/${modal}`, { method: "PUT", body: JSON.stringify(body) });
-      if (error || !data) return setError(error || "Error al actualizar centro");
+      res = await api(`/api/centros/${modal}`, { method: "PUT", body: JSON.stringify(body) });
     }
+    setSaving(false);
+    if (res?.error || !res?.data) return setError(res?.error || "Error al guardar centro");
     setModal(null);
     fetchData();
   }
@@ -100,104 +131,158 @@ export default function CentrosPage() {
   return (
     <AuthGuard>
       <AppShell>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-          <h2 style={{ fontSize: 18 }}>Centros Judiciales</h2>
-          <button className="btn btn-sm" onClick={abrirNuevo}>
-            + Nuevo centro
-          </button>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Centros Judiciales</h2>
+            <p className="text-sm text-muted-foreground">Maestro de centros judiciales</p>
+          </div>
+          <Button size="sm" onClick={abrirNuevo}>
+            <Plus size={14} />
+            Nuevo centro
+          </Button>
         </div>
 
-        {error && <div className="alert error">{error}</div>}
-        {loading && <div className="muted" style={{ padding: 12 }}>Cargando…</div>}
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {error}
+          </div>
+        )}
 
-        {!loading && centros.length === 0 && <div className="empty">Sin centros</div>}
+        {loading && <div className="py-4 text-sm text-muted-foreground">Cargando…</div>}
+
+        {!loading && centros.length === 0 && (
+          <div className="py-16 text-center text-sm text-muted-foreground">Sin centros</div>
+        )}
 
         {centros.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Nombre</th>
-                  <th>Provincia</th>
-                  <th>Unidad</th>
-                  <th>Sitio web</th>
-                  <th>Endpoint</th>
-                  {isAdmin && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Provincia</TableHead>
+                  <TableHead>Unidad</TableHead>
+                  <TableHead>Sitio web</TableHead>
+                  <TableHead>Endpoint</TableHead>
+                  {isAdmin && <TableHead className="text-right" />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {centros.map((c) => (
-                  <tr key={c.CentroJudId}>
-                    <td className="mono">{c.CentroJudId}</td>
-                    <td>{c.nombre}</td>
-                    <td>{c.provinciaNombre}</td>
-                    <td>{c.unidad}</td>
-                    <td className="muted">{c.sitioWeb}</td>
-                    <td className="mono">{c.equivEndpoint}</td>
+                  <TableRow key={c.CentroJudId}>
+                    <TableCell className="font-mono text-xs">{c.CentroJudId}</TableCell>
+                    <TableCell className="font-medium">{c.nombre}</TableCell>
+                    <TableCell>{c.provinciaNombre}</TableCell>
+                    <TableCell>{c.unidad}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.sitioWeb}</TableCell>
+                    <TableCell className="font-mono text-xs">{c.equivEndpoint}</TableCell>
                     {isAdmin && (
-                      <td>
-                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(c)}>Editar</button>
-                          <button className="btn btn-danger btn-sm" onClick={() => eliminar(c)}>Eliminar</button>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => abrirEditar(c)} aria-label="Editar">
+                            <Pencil size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-400 hover:bg-red-500/10 hover:text-red-400"
+                            onClick={() => eliminar(c)}
+                            aria-label="Eliminar"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </div>
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Card>
         )}
 
-        {modal !== null && (
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, zIndex: 50 }}
-            onClick={() => setModal(null)}
-          >
-            <form
-              className="toolbar"
-              style={{ maxWidth: 500, width: "100%", marginBottom: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              onSubmit={guardar}
-            >
-              <h3 style={{ fontSize: 16, marginBottom: 14 }}>
-                {modal === "nuevo" ? "Nuevo centro judicial" : `Editar centro (id ${modal})`}
-              </h3>
-              <div className="form-grid">
-                <div className="field" style={{ gridColumn: "1 / -1" }}>
-                  <label>Nombre *</label>
-                  <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required maxLength={40} />
+        <Dialog open={modal !== null} onOpenChange={(o) => !o && setModal(null)}>
+          <DialogContent className="sm:max-w-md">
+            <form onSubmit={guardar}>
+              <DialogHeader>
+                <DialogTitle>
+                  {modal === "nuevo" ? "Nuevo centro judicial" : `Editar centro (id ${modal})`}
+                </DialogTitle>
+                <DialogDescription>
+                  Completá los datos del centro judicial.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="space-y-1.5">
+                  <Label>Nombre *</Label>
+                  <Input
+                    value={form.nombre}
+                    onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                    required
+                    maxLength={40}
+                  />
                 </div>
-                <div className="field">
-                  <label>Provincia</label>
-                  <select value={form.provinciaId} onChange={(e) => setForm({ ...form, provinciaId: e.target.value })}>
-                    <option value="">— Sin provincia —</option>
-                    {provincias.map((p) => (
-                      <option key={p.id} value={p.id}>{p.nombre}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Provincia</Label>
+                    <Select
+                      value={form.provinciaId}
+                      onValueChange={(v) => setForm({ ...form, provinciaId: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sin provincia" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">— Sin provincia —</SelectItem>
+                        {provincias.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Unidad</Label>
+                    <Input
+                      value={form.unidad}
+                      onChange={(e) => setForm({ ...form, unidad: e.target.value })}
+                      maxLength={40}
+                    />
+                  </div>
                 </div>
-                <div className="field">
-                  <label>Unidad</label>
-                  <input value={form.unidad} onChange={(e) => setForm({ ...form, unidad: e.target.value })} maxLength={40} />
-                </div>
-                <div className="field">
-                  <label>Sitio web</label>
-                  <input value={form.sitioWeb} onChange={(e) => setForm({ ...form, sitioWeb: e.target.value })} maxLength={80} />
-                </div>
-                <div className="field">
-                  <label>Endpoint (4)</label>
-                  <input value={form.equivEndpoint} onChange={(e) => setForm({ ...form, equivEndpoint: e.target.value })} maxLength={4} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Sitio web</Label>
+                    <Input
+                      value={form.sitioWeb}
+                      onChange={(e) => setForm({ ...form, sitioWeb: e.target.value })}
+                      maxLength={80}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Endpoint (4)</Label>
+                    <Input
+                      value={form.equivEndpoint}
+                      onChange={(e) => setForm({ ...form, equivEndpoint: e.target.value })}
+                      maxLength={4}
+                    />
+                  </div>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                <button type="submit" className="btn">Guardar</button>
-                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
-              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setModal(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving && <Loader2 className="animate-spin" />}
+                  Guardar
+                </Button>
+              </DialogFooter>
             </form>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
       </AppShell>
     </AuthGuard>
   );

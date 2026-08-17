@@ -2,9 +2,25 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FolderOpen, Upload, FileArchive, Building2, MapPin, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  FolderOpen,
+  Upload,
+  FileArchive,
+  Building2,
+  MapPin,
+  Users,
+  LogOut,
+  Menu,
+  Scale,
+} from "lucide-react";
 import { getMe } from "@/lib/client";
 import type { Kpis } from "@/components/KpiCards";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 type User = { nombre: string; username: string; rol: string };
 
@@ -24,6 +40,67 @@ function fmtFecha(s: string | null | undefined) {
   const d = new Date(s);
   if (isNaN(d.getTime())) return s;
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function SidebarContent({
+  nav,
+  pathname,
+  user,
+  onNavigate,
+}: {
+  nav: NavItem[];
+  pathname: string;
+  user: User | null;
+  onNavigate?: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex items-center gap-3 px-2 pt-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <Scale size={18} />
+        </div>
+        <div className="leading-tight">
+          <div className="text-sm font-semibold">Expedientes</div>
+          <div className="text-xs text-muted-foreground">Sistema jurídico</div>
+        </div>
+      </div>
+
+      <Separator />
+
+      <nav className="flex flex-1 flex-col gap-1">
+        {nav.map((n) => {
+          const active = pathname === n.href;
+          return (
+            <a
+              key={n.href}
+              href={n.href}
+              onClick={onNavigate}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              <n.Icon size={16} className="shrink-0" />
+              <span>{n.label}</span>
+            </a>
+          );
+        })}
+      </nav>
+
+      <Separator />
+
+      <div className="px-2">
+        {user && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="truncate">Conectado como {user.username}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -49,87 +126,64 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const nav: NavItem[] = user?.rol === "ADMIN" ? [...NAV, { href: "/usuarios", label: "Usuarios", Icon: Users }] : NAV;
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <button className="btn btn-ghost btn-sm hamburger" onClick={() => setMenu(true)} aria-label="Abrir menú">
-            ☰
-          </button>
-          <h1 style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <a
-              href="/dashboard"
-              style={{ color: "var(--text)", textDecoration: "none", display: "flex", alignItems: "center", gap: 10 }}
-            >
-              <img
-                src="/logo.png"
-                alt="Logo"
-                className="topbar-logo"
-                width={96}
-                height={35}
-                style={{ objectFit: "contain" }}
-              />
-              <span>Expedientes Jurídicos</span>
-            </a>
-          </h1>
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => setMenu(true)}
+            aria-label="Abrir menú"
+          >
+            <Menu size={18} />
+          </Button>
+          <a href="/dashboard" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <Scale size={16} />
+            </div>
+            <span className="hidden text-sm font-semibold sm:inline">Expedientes Jurídicos</span>
+          </a>
         </div>
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <span className="user">
-            {user ? `${user.nombre} (${user.username})` : ""}
-            {user && <span className="badge" style={{ marginLeft: 8 }}>{user.rol}</span>}
-          </span>
-          <button className="btn btn-ghost btn-sm" onClick={logout}>
-            Salir
-          </button>
+
+        <div className="flex items-center gap-3">
+          {user && (
+            <div className="hidden items-center gap-2 text-sm text-muted-foreground md:flex">
+              <span className="truncate max-w-[180px]">{user.nombre}</span>
+              <Badge variant={user.rol === "ADMIN" ? "warning" : "secondary"}>{user.rol}</Badge>
+            </div>
+          )}
+          <Button variant="ghost" size="sm" onClick={logout}>
+            <LogOut size={14} />
+            <span className="hidden sm:inline">Salir</span>
+          </Button>
         </div>
       </header>
 
-      <div className="shell-body">
-        <aside className="sidebar">
-          <nav className="side-nav">
-            {nav.map((n) => (
-              <a key={n.href} href={n.href} className={pathname === n.href ? "active" : ""}>
-                <n.Icon size={16} strokeWidth={2} />
-                <span>{n.label}</span>
-              </a>
-            ))}
-          </nav>
-          {user && (
-            <div className="muted" style={{ fontSize: 12 }}>
-              Conectado como <b>{user.username}</b>
-            </div>
-          )}
+      <div className="flex flex-1">
+        <aside className="hidden w-60 shrink-0 border-r bg-sidebar p-4 lg:block">
+          <div className="sticky top-20">
+            <SidebarContent nav={nav} pathname={pathname} user={user} />
+          </div>
         </aside>
-        <main className="content">{children}</main>
+
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[1400px]">{children}</div>
+        </main>
       </div>
 
-      {menu && (
-        <div className="drawer-overlay" onClick={() => setMenu(false)}>
-          <div className="drawer-left" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <b>Menú</b>
-              <button className="btn btn-ghost btn-sm" onClick={() => setMenu(false)} aria-label="Cerrar menú">
-                ✕
-              </button>
-            </div>
-            <nav className="side-nav">
-              {nav.map((n) => (
-                <a
-                  key={n.href}
-                  href={n.href}
-                  className={pathname === n.href ? "active" : ""}
-                  onClick={() => setMenu(false)}
-                >
-                  <n.Icon size={16} strokeWidth={2} />
-                  <span>{n.label}</span>
-                </a>
-              ))}
-            </nav>
-          </div>
-        </div>
-      )}
+      <Sheet open={menu} onOpenChange={setMenu}>
+        <SheetContent side="left" className="w-64 p-4">
+          <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
+          <SidebarContent nav={nav} pathname={pathname} user={user} onNavigate={() => setMenu(false)} />
+        </SheetContent>
+      </Sheet>
 
-      <div className="status-strip">
-        <span className="dot ok" /> Sistema activo
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground sm:px-6">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+          Sistema activo
+        </span>
         <span>·</span>
         <span>{kpis ? `${kpis.total.toLocaleString()} expedientes` : "cargando…"}</span>
         <span>·</span>
@@ -138,14 +192,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <>
             <span>·</span>
             <span>
-              Usuario <b>{user.username}</b>
+              Usuario <b className="font-medium text-foreground">{user.username}</b>
             </span>
           </>
         )}
       </div>
 
-      <footer className="footer">
-        © {new Date().getFullYear()} <a href="https://softgroup.com.ar" target="_blank" rel="noreferrer">softgroup.com.ar</a>
+      <footer className="border-t px-4 py-3 text-center text-xs text-muted-foreground sm:px-6">
+        © {new Date().getFullYear()}{" "}
+        <a href="https://softgroup.com.ar" target="_blank" rel="noreferrer" className="hover:underline">
+          softgroup.com.ar
+        </a>
       </footer>
     </div>
   );

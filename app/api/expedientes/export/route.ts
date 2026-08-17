@@ -145,7 +145,6 @@ export async function GET(req: NextRequest) {
     const { where, params } = buildWhere(url.searchParams);
     const order = orderBy(url.searchParams);
 
-    const formato = url.searchParams.get("formato") === "pdf" ? "pdf" : "csv";
     const maxRows = formato === "csv" ? CSV_MAX : PDF_MAX;
 
     const rows = await query(

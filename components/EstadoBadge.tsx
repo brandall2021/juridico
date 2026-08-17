@@ -1,5 +1,8 @@
+import { Badge } from "@/components/ui/badge";
+
 export default function EstadoBadge({ estado }: { estado?: string | null }) {
   const e = (estado || "").trim().toUpperCase();
-  const cls = e === "SI" ? "ok" : e === "NO" ? "warn" : e === "KO" ? "danger" : "";
-  return <span className={`badge ${cls}`}>{e || "—"}</span>;
+  const variant =
+    e === "SI" ? "success" : e === "NO" ? "warning" : e === "KO" ? "danger" : "muted";
+  return <Badge variant={variant}>{e || "—"}</Badge>;
 }

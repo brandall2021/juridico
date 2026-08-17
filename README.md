@@ -22,6 +22,7 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 
 - Next.js 14 (App Router, API routes)
 - TypeScript
+- Tailwind CSS + shadcn/ui (design system oscuro)
 - Driver `mssql` v11 (tedious, JS puro — funciona en contenedores Alpine sin dependencias nativas)
 - `jsonwebtoken` + `bcryptjs` para autenticación
 - `csv-parse` para importación de CSV
@@ -169,7 +170,8 @@ lib/
   csv.ts                    → parser de CSV
   client.ts                 → helpers de fetch del cliente
 components/
-  AppShell.tsx              → sidebar + franja de estado
+  ui/                   → primitivas shadcn/ui (button, input, dialog, table, etc.)
+  AppShell.tsx          → sidebar + topbar + franja de estado
   AuthGuard.tsx             → sesión obligatoria
   KpiCards.tsx              → tarjetas de indicadores
   EstadoBadge.tsx           → badge SI / NO / KO

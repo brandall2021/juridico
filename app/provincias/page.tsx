@@ -1,9 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import AuthGuard from "@/components/AuthGuard";
 import { api } from "@/lib/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Provincia = { id: string; nombre: string };
 
@@ -11,6 +32,7 @@ export default function ProvinciasPage() {
   const [provincias, setProvincias] = useState<Provincia[]>([]);
   const [me, setMe] = useState<{ rol: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<"nuevo" | null | string>(null);
   const [nombre, setNombre] = useState("");
@@ -37,13 +59,15 @@ export default function ProvinciasPage() {
     e.preventDefault();
     setError(null);
     if (!nombre.trim()) return setError("Ingresá un nombre");
+    setSaving(true);
+    let res;
     if (modal === "nuevo") {
-      const { data, error } = await api("/api/provincias", { method: "POST", body: JSON.stringify({ nombre }) });
-      if (error || !data) return setError(error || "Error al crear provincia");
+      res = await api("/api/provincias", { method: "POST", body: JSON.stringify({ nombre }) });
     } else if (typeof modal === "string") {
-      const { data, error } = await api(`/api/provincias/${modal}`, { method: "PUT", body: JSON.stringify({ nombre }) });
-      if (error || !data) return setError(error || "Error al actualizar provincia");
+      res = await api(`/api/provincias/${modal}`, { method: "PUT", body: JSON.stringify({ nombre }) });
     }
+    setSaving(false);
+    if (res?.error || !res?.data) return setError(res?.error || "Error al guardar provincia");
     setModal(null);
     setNombre("");
     fetchData();
@@ -60,73 +84,114 @@ export default function ProvinciasPage() {
   return (
     <AuthGuard>
       <AppShell>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-          <h2 style={{ fontSize: 18 }}>Provincias</h2>
-          <button className="btn btn-sm" onClick={() => { setNombre(""); setModal("nuevo"); }}>
-            + Nueva provincia
-          </button>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Provincias</h2>
+            <p className="text-sm text-muted-foreground">Maestro de provincias</p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              setNombre("");
+              setModal("nuevo");
+            }}
+          >
+            <Plus size={14} />
+            Nueva provincia
+          </Button>
         </div>
 
-        {error && <div className="alert error">{error}</div>}
-        {loading && <div className="muted" style={{ padding: 12 }}>Cargando…</div>}
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {error}
+          </div>
+        )}
 
-        {!loading && provincias.length === 0 && <div className="empty">Sin provincias</div>}
+        {loading && <div className="py-4 text-sm text-muted-foreground">Cargando…</div>}
+
+        {!loading && provincias.length === 0 && (
+          <div className="py-16 text-center text-sm text-muted-foreground">Sin provincias</div>
+        )}
 
         {provincias.length > 0 && (
-          <div className="table-wrap" style={{ maxWidth: 700 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Nombre</th>
-                  {isAdmin && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
+          <Card className="max-w-2xl">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  {isAdmin && <TableHead className="text-right" />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {provincias.map((p) => (
-                  <tr key={p.id}>
-                    <td className="mono">{p.id.trim()}</td>
-                    <td>{p.nombre}</td>
+                  <TableRow key={p.id}>
+                    <TableCell className="font-mono text-xs">{p.id.trim()}</TableCell>
+                    <TableCell className="font-medium">{p.nombre}</TableCell>
                     {isAdmin && (
-                      <td>
-                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => { setNombre(p.nombre); setModal(p.id); }}>Editar</button>
-                          <button className="btn btn-danger btn-sm" onClick={() => eliminar(p)}>Eliminar</button>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setNombre(p.nombre);
+                              setModal(p.id);
+                            }}
+                            aria-label="Editar"
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-400 hover:bg-red-500/10 hover:text-red-400"
+                            onClick={() => eliminar(p)}
+                            aria-label="Eliminar"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </div>
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Card>
         )}
 
-        {modal !== null && (
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, zIndex: 50 }}
-            onClick={() => setModal(null)}
-          >
-            <form
-              className="toolbar"
-              style={{ maxWidth: 420, width: "100%", marginBottom: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              onSubmit={guardar}
-            >
-              <h3 style={{ fontSize: 16, marginBottom: 14 }}>
-                {modal === "nuevo" ? "Nueva provincia" : `Editar provincia (${modal})`}
-              </h3>
-              <div className="field">
-                <label>Nombre *</label>
-                <input value={nombre} onChange={(e) => setNombre(e.target.value)} required maxLength={40} autoFocus />
+        <Dialog open={modal !== null} onOpenChange={(o) => !o && setModal(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <form onSubmit={guardar}>
+              <DialogHeader>
+                <DialogTitle>
+                  {modal === "nuevo" ? "Nueva provincia" : `Editar provincia (${modal})`}
+                </DialogTitle>
+                <DialogDescription>Ingresá el nombre de la provincia.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5 py-4">
+                <Label>Nombre *</Label>
+                <Input
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  required
+                  maxLength={40}
+                  autoFocus
+                />
               </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                <button type="submit" className="btn">Guardar</button>
-                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
-              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setModal(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving && <Loader2 className="animate-spin" />}
+                  Guardar
+                </Button>
+              </DialogFooter>
             </form>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
       </AppShell>
     </AuthGuard>
   );

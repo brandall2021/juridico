@@ -1,9 +1,23 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
+import { ArrowLeft, Upload, FileDown, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import AuthGuard from "@/components/AuthGuard";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 type Resultado = {
   totalLeidos?: number;
@@ -138,33 +152,51 @@ export default function ImportarPage() {
   return (
     <AuthGuard>
       <AppShell>
-        <div style={{ marginBottom: 16 }}>
-          <Link href="/expedientes">← Volver al listado</Link>
+        <div className="mb-6">
+          <Button asChild variant="ghost" size="sm" className="mb-3">
+            <a href="/expedientes">
+              <ArrowLeft size={14} />
+              Volver al listado
+            </a>
+          </Button>
+          <div>
+            <h2 className="text-xl font-semibold">Importar CSV</h2>
+            <p className="text-sm text-muted-foreground">
+              Subí el archivo, elegí qué columna del CSV corresponde a cada campo del registro y
+              presioná <em>Confirmar e importar</em>. Solo <code className="text-primary">Expediente</code>{" "}
+              es obligatoria.
+            </p>
+          </div>
         </div>
 
-        <div className="toolbar" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 16 }}>Importar CSV</h3>
-          <p className="muted" style={{ marginTop: 4 }}>
-            Subí el archivo, elegí qué columna del CSV corresponde a cada campo del registro y
-            presioná <em>Confirmar e importar</em>. Solo <code>Expediente</code> es obligatoria. Se
-            importan <code>Centro Judicial</code> (por nombre o directamente por{" "}
-            <code>ExpdteCenJudId</code>), <code>Unidad Judicial</code>, <code>Expediente</code>,{" "}
-            <code>Actor</code>, <code>Demandado</code> y los estados{" "}
-            <code>ExpdteEstado</code> (ej. <em>ACT</em>) y <code>ExpdteEstadoNombre</code> (ej.{" "}
-            <em>ACTIVO</em>); la <code>Carátula</code> se genera automáticamente como{" "}
-            <em>Actor C/ Demandado</em>. Los campos <code>Fecha</code>,{" "}
-            <code>Descripción</code>, <code>Fecha Procesado</code>, <code>Carátula</code> e{" "}
-            <code>Historia</code> no se importan. Si el archivo tiene una columna{" "}
-            <code>Estado</code> (SI/NO/KO) se guarda automáticamente como "actualizado".
-          </p>
-          <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={descargarPlantilla}>
-            Descargar plantilla
-          </button>
-        </div>
+        <Card className="mb-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm text-muted-foreground">
+              Se importan <code className="text-primary">Centro Judicial</code>,{" "}
+              <code className="text-primary">Unidad Judicial</code>,{" "}
+              <code className="text-primary">Expediente</code>,{" "}
+              <code className="text-primary">Actor</code>,{" "}
+              <code className="text-primary">Demandado</code> y los estados{" "}
+              <code className="text-primary">ExpdteEstado</code> /{" "}
+              <code className="text-primary">ExpdteEstadoNombre</code>. La{" "}
+              <code className="text-primary">Carátula</code> se genera automáticamente. Los campos{" "}
+              <code className="text-primary">Fecha</code>, <code className="text-primary">Descripción</code>,{" "}
+              <code className="text-primary">Fecha Procesado</code> e{" "}
+              <code className="text-primary">Historia</code> no se importan.
+            </div>
+            <Button variant="outline" size="sm" onClick={descargarPlantilla}>
+              <FileDown size={14} />
+              Descargar plantilla
+            </Button>
+          </div>
+        </Card>
 
         {!preview ? (
           <div
-            className={`drop ${dragging ? "over" : ""}`}
+            className={cn(
+              "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 text-center transition-colors",
+              dragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+            )}
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => {
               e.preventDefault();
@@ -182,142 +214,165 @@ export default function ImportarPage() {
               ref={fileRef}
               type="file"
               accept=".csv,text/csv"
-              style={{ display: "none" }}
+              className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) seleccionarArchivo(f);
               }}
             />
-            <div style={{ fontSize: 15, marginBottom: 6 }}>
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <Upload size={22} />
+            </div>
+            <div className="text-sm font-medium">
               {fileName || "Arrastrá el archivo CSV acá o hacé clic para seleccionar"}
             </div>
-            {loading && <div className="muted">Analizando archivo…</div>}
+            {loading && <div className="mt-2 text-sm text-muted-foreground">Analizando archivo…</div>}
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-            <span>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <span className="text-sm">
               <b>{fileName}</b>{" "}
-              <span className="muted">
+              <span className="text-muted-foreground">
                 ({preview.columns.length} columna{preview.columns.length === 1 ? "" : "s"} ·{" "}
                 {preview.total} registro{preview.total === 1 ? "" : "s"})
               </span>
             </span>
-            <button className="btn btn-ghost btn-sm" onClick={cambiarArchivo}>
+            <Button variant="outline" size="sm" onClick={cambiarArchivo}>
               Cambiar archivo
-            </button>
+            </Button>
           </div>
         )}
 
-        {preview?.error && <div className="alert error" style={{ marginTop: 16 }}>{preview.error}</div>}
+        {preview?.error && (
+          <Alert variant="destructive" className="mt-4">
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>No se pudo analizar el archivo</AlertTitle>
+            <AlertDescription>{preview.error}</AlertDescription>
+          </Alert>
+        )}
 
         {preview && !preview.error && (
-          <div className="toolbar" style={{ marginTop: 4 }}>
-            <h3 style={{ fontSize: 15, marginBottom: 8 }}>Mapear columnas</h3>
-            <p className="muted" style={{ marginBottom: 12 }}>
-              Columna detectadas:{" "}
+          <Card className="mt-2 p-4">
+            <h3 className="mb-1 text-sm font-semibold">Mapear columnas</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Columnas detectadas:{" "}
               {preview.columns.map((c) => (
-                <code key={c} style={{ marginRight: 6 }}>
+                <code key={c} className="mr-1.5 rounded bg-muted px-1.5 py-0.5 text-xs">
                   {c}
                 </code>
               ))}
             </p>
-            <div className="form-grid">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {MAP_FIELDS.map((f) => {
                 const col = mapping[f.key] || "";
                 const ejemplo = preview.rows[0]?.[col];
                 return (
                   <div
-                    className="field"
                     key={f.key}
-                    style={f.wide ? { gridColumn: "1 / -1" } : undefined}
+                    className={cn("space-y-1.5", f.wide && "sm:col-span-2 lg:col-span-3")}
                   >
-                    <label>
+                    <Label>
                       {f.label}
-                      {f.required ? " *" : ""}
-                    </label>
-                    <select
-                      value={col}
-                      onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))}
-                    >
-                      <option value="">— No importar —</option>
-                      {preview.columns.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      {f.required && <span className="text-red-400"> *</span>}
+                    </Label>
+                    <Select value={col} onValueChange={(v) => setMapping((m) => ({ ...m, [f.key]: v }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="— No importar —" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">— No importar —</SelectItem>
+                        {preview.columns.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="text-xs text-muted-foreground">
                       {f.required && !col
                         ? "Requerido"
                         : col
-                        ? `Ejemplo: ${ejemplo ?? "(vacío)"}`
-                        : "No se importará este campo"}
+                          ? `Ejemplo: ${ejemplo ?? "(vacío)"}`
+                          : "No se importará este campo"}
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Vista previa del mapeo</h3>
-            <p className="muted" style={{ marginBottom: 12 }}>
+            <h3 className="mb-1 mt-6 text-sm font-semibold">Vista previa del mapeo</h3>
+            <p className="mb-3 text-sm text-muted-foreground">
               Primeros {preview.rows.length} registro{preview.rows.length === 1 ? "" : "s"} del archivo
               con los campos ya mapeados. Verificá que los valores correspondan antes de confirmar.
             </p>
             {MAP_FIELDS.some((f) => mapping[f.key]) ? (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
+              <div className="overflow-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                       {MAP_FIELDS.filter((f) => mapping[f.key]).map((f) => (
-                        <th key={f.key}>
+                        <TableHead key={f.key} className="whitespace-nowrap">
                           {f.label}
-                          <div className="muted" style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                          <div className="text-xs font-normal normal-case text-muted-foreground">
                             ← {mapping[f.key]}
                           </div>
-                        </th>
+                        </TableHead>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {preview.rows.map((row, i) => (
-                      <tr key={i}>
+                      <TableRow key={i}>
                         {MAP_FIELDS.filter((f) => mapping[f.key]).map((f) => (
-                          <td key={f.key}>{row[mapping[f.key]] ?? ""}</td>
+                          <TableCell key={f.key}>{row[mapping[f.key]] ?? ""}</TableCell>
                         ))}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             ) : (
-              <p className="muted">Seleccioná al menos un campo para ver la vista previa.</p>
+              <p className="text-sm text-muted-foreground">
+                Seleccioná al menos un campo para ver la vista previa.
+              </p>
             )}
 
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button className="btn" onClick={importar} disabled={importing}>
+            <div className="mt-4">
+              <Button onClick={importar} disabled={importing}>
+                {importing && <Loader2 className="animate-spin" />}
                 {importing
                   ? "Importando…"
                   : `Confirmar e importar ${preview.total} registro${preview.total === 1 ? "" : "s"}`}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {resultado && !resultado.error && (
-          <div className="alert ok" style={{ marginTop: 16 }}>
-            Leídos: {resultado.totalLeidos} · Insertados: {resultado.insertados} · Duplicados/saltados:{" "}
-            {resultado.duplicados}
-          </div>
+          <Alert variant="success" className="mt-4">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertTitle>Importación completada</AlertTitle>
+            <AlertDescription>
+              Leídos: {resultado.totalLeidos} · Insertados: {resultado.insertados} ·
+              Duplicados/saltados: {resultado.duplicados}
+            </AlertDescription>
+          </Alert>
         )}
         {resultado?.error && (
-          <div className="alert error" style={{ marginTop: 16 }}>
-            {resultado.error}
-          </div>
+          <Alert variant="destructive" className="mt-4">
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>Error al importar</AlertTitle>
+            <AlertDescription>{resultado.error}</AlertDescription>
+          </Alert>
         )}
         {resultado?.errores && resultado.errores.length > 0 && (
-          <div className="alert warn" style={{ marginTop: 16, whiteSpace: "pre-line" }}>
-            {resultado.errores.join("\n")}
-          </div>
+          <Alert variant="warning" className="mt-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Errores parciales</AlertTitle>
+            <AlertDescription className="whitespace-pre-line">
+              {resultado.errores.join("\n")}
+            </AlertDescription>
+          </Alert>
         )}
       </AppShell>
     </AuthGuard>

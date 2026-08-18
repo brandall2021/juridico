@@ -1,27 +1,33 @@
 import sql from "mssql";
 
-if (!process.env.MSSQL_HOST) throw new Error("MSSQL_HOST environment variable is required");
-if (!process.env.MSSQL_USER) throw new Error("MSSQL_USER environment variable is required");
-if (!process.env.MSSQL_PASSWORD) throw new Error("MSSQL_PASSWORD environment variable is required");
-if (!process.env.MSSQL_DATABASE) throw new Error("MSSQL_DATABASE environment variable is required");
+function getConfig(): sql.config {
+  const host = process.env.MSSQL_HOST;
+  const user = process.env.MSSQL_USER;
+  const password = process.env.MSSQL_PASSWORD;
+  const database = process.env.MSSQL_DATABASE;
+  if (!host) throw new Error("MSSQL_HOST environment variable is required");
+  if (!user) throw new Error("MSSQL_USER environment variable is required");
+  if (!password) throw new Error("MSSQL_PASSWORD environment variable is required");
+  if (!database) throw new Error("MSSQL_DATABASE environment variable is required");
 
-const config: sql.config = {
-  server: process.env.MSSQL_HOST,
-  port: Number(process.env.MSSQL_PORT || 1433),
-  user: process.env.MSSQL_USER,
-  password: process.env.MSSQL_PASSWORD,
-  database: process.env.MSSQL_DATABASE,
-  options: {
-    encrypt: process.env.MSSQL_ENCRYPT === "true",
-    trustServerCertificate: process.env.MSSQL_TRUST_SERVER_CERT !== "false",
-    enableArithAbort: true,
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000,
-  },
-};
+  return {
+    server: host,
+    port: Number(process.env.MSSQL_PORT || 1433),
+    user,
+    password,
+    database,
+    options: {
+      encrypt: process.env.MSSQL_ENCRYPT === "true",
+      trustServerCertificate: process.env.MSSQL_TRUST_SERVER_CERT !== "false",
+      enableArithAbort: true,
+    },
+    pool: {
+      max: 10,
+      min: 0,
+      idleTimeoutMillis: 30000,
+    },
+  };
+}
 
 declare global {
   // eslint-disable-next-line no-var
@@ -33,6 +39,8 @@ declare global {
 export async function getPool(): Promise<sql.ConnectionPool> {
   if (global.__mssql) return global.__mssql;
   if (global.__mssqlPromise) return global.__mssqlPromise;
+
+  const config = getConfig();
 
   global.__mssqlPromise = (async () => {
     const pool = await new sql.ConnectionPool(config).connect();

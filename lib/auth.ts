@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET environment variable is required");
-}
-const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
 const COOKIE_NAME = "juridico_token";
+
+function requireSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET environment variable is required");
+  }
+  return secret;
+}
 
 export type SessionUser = {
   id: number;
@@ -17,12 +22,12 @@ export type SessionUser = {
 };
 
 export function signToken(user: SessionUser): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: JWT_EXPIRES } as jwt.SignOptions);
+  return jwt.sign(user, requireSecret(), { expiresIn: JWT_EXPIRES } as jwt.SignOptions);
 }
 
 export function verifyToken(token: string): SessionUser | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as SessionUser;
+    return jwt.verify(token, requireSecret()) as SessionUser;
   } catch {
     return null;
   }
@@ -77,8 +82,6 @@ export function requireAdmin(req: NextRequest) {
 
 export const ROLES = ["ADMIN", "USER"] as const;
 export type Rol = (typeof ROLES)[number];
-
-import bcrypt from "bcryptjs";
 
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, 12);

@@ -76,13 +76,23 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   historia: "historia",
 };
 
+function decodeCsvBuffer(buffer: Buffer): string {
+  const utf8 = buffer.toString("utf8");
+  if (!utf8.includes("\uFFFD")) return utf8;
+
+  // Some user-uploaded CSVs come from Excel in latin1/cp1252.
+  // Falling back preserves accented characters and ñ.
+  return buffer.toString("latin1");
+}
+
 function parseRows(
   buffer: Buffer,
   mapping?: ColumnMapping
 ): Promise<{ columns: string[]; rows: Record<string, string>[] }> {
   return new Promise((resolve, reject) => {
+    const csv = decodeCsvBuffer(buffer);
     parse(
-      buffer,
+      csv,
       {
         columns: true,
         delimiter: [",", ";"],

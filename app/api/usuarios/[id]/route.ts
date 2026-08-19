@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return NextResponse.json({ error: "La contraseña debe tener al menos 6 caracteres" }, { status: 400 });
       }
       update.push("password_hash = @hash");
-      paramsObj.hash = hashPassword(password);
+      paramsObj.hash = await hashPassword(password);
     }
 
     if (update.length === 0) {

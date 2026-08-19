@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     const result = await execute(
       "INSERT INTO dbo.app_usuarios (username, password_hash, nombre, rol) VALUES (@username, @hash, @nombre, @rol)",
-      { username, hash: hashPassword(password), nombre, rol }
+      { username, hash: await hashPassword(password), nombre, rol }
     );
 
     return NextResponse.json(

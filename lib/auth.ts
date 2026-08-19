@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET environment variable is required");
-}
-const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
 const COOKIE_NAME = "juridico_token";
 
@@ -17,11 +13,19 @@ export type SessionUser = {
 };
 
 export function signToken(user: SessionUser): string {
+  const JWT_SECRET = process.env.JWT_SECRET;
+  if (!JWT_SECRET) {
+    throw new Error("JWT_SECRET environment variable is required");
+  }
   return jwt.sign(user, JWT_SECRET, { expiresIn: JWT_EXPIRES } as jwt.SignOptions);
 }
 
 export function verifyToken(token: string): SessionUser | null {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      throw new Error("JWT_SECRET environment variable is required");
+    }
     return jwt.verify(token, JWT_SECRET) as SessionUser;
   } catch {
     return null;

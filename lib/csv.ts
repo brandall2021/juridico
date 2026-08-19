@@ -61,7 +61,6 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   "fecha procesado": "fechaProcesado",
   "fecha_procesado": "fechaProcesado",
   fechaprocesado: "fechaProcesado",
-  estado: "estado",
   expdteestado: "estadoProcesal",
   "estado procesal": "estadoProcesal",
   estadoprocesal: "estadoProcesal",
@@ -74,6 +73,8 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   caratula: "caratula",
   "carátula": "caratula",
   historia: "historia",
+  "estado actualizado": "estado",
+  expdteactualizado: "estado",
 };
 
 function decodeCsvBuffer(buffer: Buffer): string {

@@ -31,8 +31,8 @@ const MAP_FIELDS: { key: string; label: string; required?: boolean; wide?: boole
   { key: "cenJudId", label: "ID Centro Judicial", hints: ["expdtecenjudid", "cenjudid", "centrojudicialid", "id centro", "idcentro"] },
   { key: "actor", label: "Actor", hints: ["actor"] },
   { key: "demandado", label: "Demandado", hints: ["demandado"] },
-  { key: "estadoProcesal", label: "Estado procesal (ExpdteEstado)", hints: ["expdteestado", "estado procesal", "estadoprocesal", "estado del expediente"] },
-  { key: "estadoProcesalNombre", label: "Nombre del estado (ExpdteEstadoNombre)", hints: ["expdteestadonombre", "estadonombre", "estado procesal nombre", "nombre estado", "nombreestado"] },
+  { key: "estadoProcesal", label: "Estado procesal (ExpdteEstado, 3 chars)", required: true, hints: ["expdteestado", "estado procesal", "estadoprocesal", "estado del expediente"] },
+  { key: "estadoProcesalNombre", label: "Nombre del estado (ExpdteEstadoNombre, 10 chars)", required: true, hints: ["expdteestadonombre", "estadonombre", "estado procesal nombre", "nombre estado", "nombreestado"] },
 ];
 
 function sugerir(cols: string[], hints: string[]): string {
@@ -109,8 +109,16 @@ export default function ImportarPage() {
     if (!file) return;
 
     const mapKeys = MAP_FIELDS.filter((f) => mapping[f.key]).map((f) => f.key);
-    if (!mapKeys.includes("expdte")) {
-      setResultado({ error: "El campo Expediente (Expdte) es obligatorio: seleccioná su columna." });
+    const required = ["expdte", "estadoProcesal", "estadoProcesalNombre"] as const;
+    const missing = required.filter((k) => !mapKeys.includes(k));
+    if (missing.length > 0) {
+      setResultado({
+        error:
+          "Faltan campos obligatorios: " +
+          missing
+            .map((k) => (k === "expdte" ? "Expediente (Expdte)" : k === "estadoProcesal" ? "ExpdteEstado" : "ExpdteEstadoNombre"))
+            .join(", "),
+      });
       return;
     }
 
@@ -147,15 +155,14 @@ export default function ImportarPage() {
           <p className="muted" style={{ marginTop: 4 }}>
             Subí el archivo, elegí qué columna del CSV corresponde a cada campo del registro y
             presioná <em>Confirmar e importar</em>. Solo <code>Expediente</code> es obligatoria. Se
-            importan <code>Centro Judicial</code> (por nombre o directamente por{" "}
-            <code>ExpdteCenJudId</code>), <code>Unidad Judicial</code>, <code>Expediente</code>,{" "}
-            <code>Actor</code>, <code>Demandado</code> y los estados{" "}
-            <code>ExpdteEstado</code> (ej. <em>ACT</em>) y <code>ExpdteEstadoNombre</code> (ej.{" "}
-            <em>ACTIVO</em>); la <code>Carátula</code> se genera automáticamente como{" "}
-            <em>Actor C/ Demandado</em>. Los campos <code>Fecha</code>,{" "}
-            <code>Descripción</code>, <code>Fecha Procesado</code>, <code>Carátula</code> e{" "}
-            <code>Historia</code> no se importan. Si el archivo tiene una columna{" "}
-            <code>Estado</code> (SI/NO/KO) se guarda automáticamente como "actualizado".
+              importan <code>Centro Judicial</code> (por nombre o directamente por{" "}
+              <code>ExpdteCenJudId</code>), <code>Unidad Judicial</code>, <code>Expediente</code>,{" "}
+              <code>Actor</code>, <code>Demandado</code>, <code>ExpdteEstado</code> (3 chars, ej. <em>ACT</em>{" "}
+              o <em>INA</em>) y <code>ExpdteEstadoNombre</code> (obligatorio, 10 chars, ej. <em>ACTIVO</em>);{" "}
+              la <code>Carátula</code> se genera automáticamente como <em>Actor C/ Demandado</em>. Los campos{" "}
+              <code>Fecha</code>, <code>Descripción</code>, <code>Fecha Procesado</code>, <code>Carátula</code> e{" "}
+              <code>Historia</code> no se importan. Si el archivo tiene una columna <code>Estado actualizado</code>{" "}
+              o <code>ExpdteActualizado</code> (SI/NO/KO), se guarda como "actualizado".
           </p>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={descargarPlantilla}>
             Descargar plantilla

@@ -127,8 +127,11 @@ export async function insertarEnCaratula(
       try {
         if (!expdte) throw new Error("falta el expediente");
         if (expdte.length > 15) throw new Error("expediente supera 15 caracteres");
-        if ((r.estado ?? "").trim().length > 2) throw new Error("estado supera 2 caracteres");
+        if ((r.estado ?? "").trim().length > 2)
+          throw new Error("estado actualizado supera 2 caracteres (usa SI/NO/KO)");
+        if (!(r.estadoProcesal ?? "").trim()) throw new Error("falta ExpdteEstado (estado procesal)");
         if ((r.estadoProcesal ?? "").trim().length > 3) throw new Error("estado procesal supera 3 caracteres");
+        if (!(r.estadoProcesalNombre ?? "").trim()) throw new Error("falta ExpdteEstadoNombre");
         if ((r.estadoProcesalNombre ?? "").trim().length > 10)
           throw new Error("estado procesal nombre supera 10 caracteres");
 

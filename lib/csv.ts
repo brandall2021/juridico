@@ -61,6 +61,7 @@ const HEADER_ALIASES: Record<string, keyof ExpedienteInput> = {
   "fecha procesado": "fechaProcesado",
   "fecha_procesado": "fechaProcesado",
   fechaprocesado: "fechaProcesado",
+  estado: "estadoProcesal",
   expdteestado: "estadoProcesal",
   "estado procesal": "estadoProcesal",
   estadoprocesal: "estadoProcesal",

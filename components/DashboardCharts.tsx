@@ -64,16 +64,27 @@ export default function DashboardCharts({
   estados,
   documentos,
   porMes,
+  centros,
+  unidades,
+  estadoResumen,
   alertas,
 }: {
   estados: Datum[];
   documentos: Datum[];
   porMes: { mes: string; total: number }[];
+  centros: Datum[];
+  unidades: Datum[];
+  estadoResumen: { activo: number; inactivo: number };
   alertas: Datum[];
 }) {
-  const totalEstados = estados.reduce((a, b) => a + b.value, 0);
   const estadosData = buildEstadoChartData(estados) as (Datum & { color: string })[];
+  const estadoActivoInactivo = [
+    { name: "Activo", value: estadoResumen.activo, color: "#22c55e" },
+    { name: "Inactivo", value: estadoResumen.inactivo, color: "#f59e0b" },
+  ];
   const docData = documentos.map((d, i) => ({ ...d, color: i === 0 ? C.azul : C.azulClaro }));
+  const centroData = centros.map((d) => ({ ...d, color: C.azul }));
+  const unidadData = unidades.map((d) => ({ ...d, color: C.azulClaro }));
   const alertData = alertas.map((a) => ({ ...a, color: a.color || C.warn }));
 
   const mesData = porMes.map((m) => ({
@@ -84,12 +95,12 @@ export default function DashboardCharts({
   return (
     <div className="charts">
       <div className="charts-grid">
-        <ChartCard title="Estados de expedientes" sub={`${totalEstados.toLocaleString()} en total`}>
+        <ChartCard title="Estado de expediente" sub="Activo / Inactivo">
           <div className="donut-wrap">
             <ResponsiveContainer width="100%" height={210}>
               <PieChart>
                 <Pie
-                  data={estadosData}
+                  data={estadoActivoInactivo}
                   dataKey="value"
                   nameKey="name"
                   innerRadius="64%"
@@ -97,7 +108,7 @@ export default function DashboardCharts({
                   paddingAngle={2}
                   stroke="none"
                 >
-                  {estadosData.map((e) => (
+                  {estadoActivoInactivo.map((e) => (
                     <Cell key={e.name} fill={e.color} />
                   ))}
                 </Pie>
@@ -105,11 +116,11 @@ export default function DashboardCharts({
               </PieChart>
             </ResponsiveContainer>
             <div className="donut-center">
-              <b>{totalEstados.toLocaleString()}</b>
+              <b>{(estadoResumen.activo + estadoResumen.inactivo).toLocaleString()}</b>
               <span>expedientes</span>
             </div>
           </div>
-          <LegendList data={estadosData} />
+          <LegendList data={estadoActivoInactivo} />
         </ChartCard>
 
         <ChartCard title="Documentos">
@@ -143,6 +154,59 @@ export default function DashboardCharts({
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <div className="charts-grid" style={{ marginTop: 16 }}>
+        <ChartCard title="Estados textuales" sub="Top estados">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={estadosData} layout="vertical" margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a3550" horizontal={false} />
+              <XAxis type="number" tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} width={128} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+              <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
+                {estadosData.map((e) => (
+                  <Cell key={e.name} fill={e.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <LegendList data={estadosData} />
+        </ChartCard>
+
+        <ChartCard title="Por centro" sub="Top 6 centros">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={centroData} layout="vertical" margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a3550" horizontal={false} />
+              <XAxis type="number" tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} width={128} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+              <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
+                {centroData.map((e) => (
+                  <Cell key={e.name} fill={e.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <LegendList data={centroData} />
+        </ChartCard>
+
+        <ChartCard title="Por unidad" sub="Top 6 unidades">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={unidadData} layout="vertical" margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a3550" horizontal={false} />
+              <XAxis type="number" tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} width={128} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+              <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
+                {unidadData.map((e) => (
+                  <Cell key={e.name} fill={e.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <LegendList data={unidadData} />
         </ChartCard>
       </div>
 

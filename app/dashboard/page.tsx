@@ -15,6 +15,9 @@ type ChartData = {
   estados: { name: string; value: number }[];
   documentos: { name: string; value: number }[];
   porMes: { mes: string; total: number }[];
+  centros: { name: string; value: number }[];
+  unidades: { name: string; value: number }[];
+  estadoResumen: { activo: number; inactivo: number };
 };
 
 export default function DashboardPage() {
@@ -88,11 +91,14 @@ export default function DashboardPage() {
               </aside>
             </div>
 
-              <DashboardCharts
-                estados={charts.estados}
-                documentos={charts.documentos}
-                porMes={charts.porMes}
-                alertas={[
+            <DashboardCharts
+              estados={charts.estados}
+              documentos={charts.documentos}
+              porMes={charts.porMes}
+              centros={charts.centros}
+              unidades={charts.unidades}
+              estadoResumen={charts.estadoResumen}
+              alertas={[
                 { name: "Sin documento", value: kpis.sinDocumento, color: "#f59e0b" },
                 { name: "Movimientos antiguos", value: kpis.antiguos, color: "#f59e0b" },
               ]}

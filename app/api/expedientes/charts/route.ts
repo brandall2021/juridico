@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (response) return response;
 
   try {
-    const [estados, documentos, porMesRaw] = await Promise.all([
+    const [estados, documentos, porMesRaw, centros, unidades] = await Promise.all([
       query<{ nombre: string; value: number }>(
         `SELECT COALESCE(NULLIF(LTRIM(RTRIM([Estado])), ''), 'Sin estado') AS nombre, COUNT(*) AS value
           FROM ${EXPEDIENTES_SOURCE}
@@ -40,6 +40,18 @@ export async function GET(req: NextRequest) {
          WHERE ${FECHA_FP} IS NOT NULL
          GROUP BY CONVERT(VARCHAR(7), ${FECHA_FP}, 120)`
       ),
+      query<{ nombre: string; value: number }>(
+        `SELECT TOP 6 COALESCE(NULLIF(LTRIM(RTRIM([Centro Judicial])), ''), 'Sin centro') AS nombre, COUNT(*) AS value
+         FROM ${EXPEDIENTES_SOURCE}
+         GROUP BY COALESCE(NULLIF(LTRIM(RTRIM([Centro Judicial])), ''), 'Sin centro')
+         ORDER BY COUNT(*) DESC, nombre ASC`
+      ),
+      query<{ nombre: string; value: number }>(
+        `SELECT TOP 6 COALESCE(NULLIF(LTRIM(RTRIM([Unidad Judicial])), ''), 'Sin unidad') AS nombre, COUNT(*) AS value
+         FROM ${EXPEDIENTES_SOURCE}
+         GROUP BY COALESCE(NULLIF(LTRIM(RTRIM([Unidad Judicial])), ''), 'Sin unidad')
+         ORDER BY COUNT(*) DESC, nombre ASC`
+      ),
     ]);
 
     const estadoResumen = await query<{ activo: number; inactivo: number }>(
@@ -52,7 +64,14 @@ export async function GET(req: NextRequest) {
     const porMesMap = new Map(porMesRaw.map((r) => [r.mes, r.total]));
     const porMes = ultimosMeses(12).map((mes) => ({ mes, total: porMesMap.get(mes) || 0 }));
 
-    return NextResponse.json({ estados, documentos, porMes, estadoResumen: estadoResumen[0] ?? { activo: 0, inactivo: 0 } });
+    return NextResponse.json({
+      estados,
+      documentos,
+      porMes,
+      centros,
+      unidades,
+      estadoResumen: estadoResumen[0] ?? { activo: 0, inactivo: 0 },
+    });
   } catch (err: any) {
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }

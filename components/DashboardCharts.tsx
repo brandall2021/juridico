@@ -14,6 +14,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { useRouter } from "next/navigation";
 import { buildEstadoChartData } from "@/lib/dashboard-data.js";
 
 const C = {
@@ -46,15 +47,21 @@ function ChartCard({ title, sub, children }: { title: string; sub?: string; chil
   );
 }
 
-function LegendList({ data }: { data: Datum[] }) {
+function LegendList({ data, onSelect }: { data: Datum[]; onSelect?: (d: Datum) => void }) {
   return (
     <div className="chart-legend">
       {data.map((d) => (
-        <div className="legend-item" key={d.name}>
+        <button
+          type="button"
+          className="legend-item"
+          key={d.name}
+          onClick={() => onSelect?.(d)}
+          style={{ width: "100%", textAlign: "left", background: "transparent", border: 0, padding: 0 }}
+        >
           <span className="legend-dot" style={{ background: d.color || C.azul }} />
           <span className="legend-name">{d.name}</span>
           <span className="legend-value">{d.value.toLocaleString()}</span>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -77,6 +84,12 @@ export default function DashboardCharts({
   estadoResumen: { activo: number; inactivo: number };
   alertas: Datum[];
 }) {
+  const router = useRouter();
+
+  function irAExpedientes(params: Record<string, string>) {
+    router.push(`/expedientes?${new URLSearchParams(params).toString()}`);
+  }
+
   const estadosData = buildEstadoChartData(estados) as (Datum & { color: string })[];
   const estadoActivoInactivo = [
     { name: "Activo", value: estadoResumen.activo, color: "#22c55e" },
@@ -109,7 +122,12 @@ export default function DashboardCharts({
                   stroke="none"
                 >
                   {estadoActivoInactivo.map((e) => (
-                    <Cell key={e.name} fill={e.color} />
+                    <Cell
+                      key={e.name}
+                      fill={e.color}
+                      cursor="pointer"
+                      onClick={() => irAExpedientes({ estado: e.name.toUpperCase() })}
+                    />
                   ))}
                 </Pie>
                 <Tooltip contentStyle={tooltipStyle} />
@@ -120,7 +138,7 @@ export default function DashboardCharts({
               <span>expedientes</span>
             </div>
           </div>
-          <LegendList data={estadoActivoInactivo} />
+          <LegendList data={estadoActivoInactivo} onSelect={(d) => irAExpedientes({ estado: d.name.toUpperCase() })} />
         </ChartCard>
 
         <ChartCard title="Documentos">
@@ -132,12 +150,12 @@ export default function DashboardCharts({
               <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
               <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={60}>
                 {docData.map((d) => (
-                  <Cell key={d.name} fill={d.color} />
+                  <Cell key={d.name} fill={d.color} cursor="pointer" onClick={() => irAExpedientes({ documento: d.name })} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <LegendList data={docData} />
+          <LegendList data={docData} onSelect={(d) => irAExpedientes({ documento: d.name })} />
         </ChartCard>
 
         <ChartCard title="Alertas">
@@ -167,12 +185,12 @@ export default function DashboardCharts({
               <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
               <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
                 {estadosData.map((e) => (
-                  <Cell key={e.name} fill={e.color} />
+                  <Cell key={e.name} fill={e.color} cursor="pointer" onClick={() => irAExpedientes({ estado: e.name })} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <LegendList data={estadosData} />
+          <LegendList data={estadosData} onSelect={(d) => irAExpedientes({ estado: d.name })} />
         </ChartCard>
 
         <ChartCard title="Por centro" sub="Top 6 centros">
@@ -184,12 +202,12 @@ export default function DashboardCharts({
               <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
               <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
                 {centroData.map((e) => (
-                  <Cell key={e.name} fill={e.color} />
+                  <Cell key={e.name} fill={e.color} cursor="pointer" onClick={() => irAExpedientes({ centro: e.name })} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <LegendList data={centroData} />
+          <LegendList data={centroData} onSelect={(d) => irAExpedientes({ centro: d.name })} />
         </ChartCard>
 
         <ChartCard title="Por unidad" sub="Top 6 unidades">
@@ -201,12 +219,12 @@ export default function DashboardCharts({
               <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
               <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
                 {unidadData.map((e) => (
-                  <Cell key={e.name} fill={e.color} />
+                  <Cell key={e.name} fill={e.color} cursor="pointer" onClick={() => irAExpedientes({ unidad: e.name })} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <LegendList data={unidadData} />
+          <LegendList data={unidadData} onSelect={(d) => irAExpedientes({ unidad: d.name })} />
         </ChartCard>
       </div>
 

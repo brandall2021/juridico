@@ -12,8 +12,9 @@ Sistema para consultar la vista `[LegajoExpdtes].[dbo].[goolge2]` (SQL Server) d
 - **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
 - **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `[LegajoExpdtes].[dbo].[goolge2]`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
 - **Maestros**: alta de Centros Judiciales (`CentrosJudiciales`) y Provincias (`Provincias`) directamente desde la app (edición/eliminación solo ADMIN).
-- **Dashboard (centro de control)**: tarjetas KPI (total de expedientes, actualizados hoy, con/sin documento, estados SI/NO/KO) y panel de alertas jurídicas con acceso directo a listados filtrados.
-- **Bandeja de expedientes**: estados SI/NO/KO como badges de color, columna Documento como enlace "Ver documento" (la URL queda oculta), detalle en panel lateral (drawer) y búsqueda global por expediente, actor, demandado o documento. En mobile la tabla se convierte en tarjetas.
+- **Dashboard (centro de control)**: tarjetas KPI (total de expedientes, actualizados hoy, con/sin documento, estado activo/inactivo) y panel de alertas jurídicas con acceso directo a listados filtrados.
+- **Bandeja de expedientes**: estado textual, columna Documento como enlace "Ver documento" (la URL queda oculta), detalle en panel lateral (drawer) y búsqueda global por expediente, actor, demandado o documento. En mobile la tabla se convierte en tarjetas.
+- **Carátula**: listado de `dbo.ExpdtesCaratula` con edición y eliminación de registros desde la app.
 - **Ordenamiento**: todas las columnas del listado son ordenables (ascendente/descendente) haciendo clic en el encabezado.
 - **Exportación**: descarga del listado filtrado a **CSV** (hasta 10.000 filas) o **PDF** (hasta 800 filas) con logo de recuperocrediticio.com y encabezado institucional.
 - **Navegación**: sidebar en desktop con menú hamburguesa en mobile, y franja de estado ("Sistema activo · total · última actualización · usuario").
@@ -147,6 +148,7 @@ Además se escribe un registro de auditoría en `dbo.app_expedientes` (usuario, 
 app/
   login/                    → pantalla de acceso
   expedientes/              → listado + filtros + detalle
+  caratula/                 → tabla ExpdtesCaratula (read/update/delete)
   expedientes/importar/     → importación CSV
   expedientes/archivos/     → archivos CSV subidos (auditoría de cargas)
   centros/                  → maestros: centros judiciales
@@ -189,13 +191,17 @@ Todas las rutas requieren sesión (cookie `juridico_token`).
 | POST | `/api/auth/logout` | Cerrar sesión |
 | GET | `/api/auth/me` | Usuario actual |
 | GET | `/api/expedientes` | Listado de la vista. Filtros: `centro, unidad, expdte, actor, demandado, descripcion, documento, estado, q, page, pageSize` (+`historia=1` para incluir el XML). `q` busca en expediente, actor, demandado, descripción y documento |
-| GET | `/api/expedientes/kpis` | Indicadores del dashboard (totales, actualizados hoy, con/sin documento, SI/NO/KO, antiguos, última actualización) |
+| GET | `/api/expedientes/kpis` | Indicadores del dashboard (totales, actualizados hoy, con/sin documento, antiguos, última actualización) |
 | GET | `/api/expedientes/[expdte]` | Detalle de un expediente (`?centro=&unidad=` para desambiguar) |
 | POST | `/api/expedientes/nuevo` | Alta manual (inserta en `dbo.ExpdtesCaratula` + auditoría) |
 | GET | `/api/expedientes/cargados` | Auditoría de cargas (`app_expedientes`, mismos filtros + `origen`) |
 | POST | `/api/expedientes/import` | Importación CSV (inserta en `dbo.ExpdtesCaratula` + registra la carga en `app_cargas`). Opcional: campo `mapping` (JSON `{campo: columna}`) |
 | POST | `/api/expedientes/import/preview` | Analiza un CSV y devuelve columnas, total y primeras filas (solo lectura) |
 | GET | `/api/expedientes/cargas` | Archivos subidos (`app_cargas`). Filtros: `q, desde, hasta, page, pageSize` |
+| GET | `/api/caratula` | Listado paginado de `dbo.ExpdtesCaratula` |
+| GET | `/api/caratula/[id]` | Detalle de un registro de `dbo.ExpdtesCaratula` |
+| PUT | `/api/caratula/[id]` | Actualizar un registro de `dbo.ExpdtesCaratula` (**ADMIN**) |
+| DELETE | `/api/caratula/[id]` | Eliminar un registro de `dbo.ExpdtesCaratula` (**ADMIN**) |
 | GET | `/api/usuarios` | Listar usuarios (**ADMIN**) |
 | POST | `/api/usuarios` | Crear usuario (**ADMIN**) |
 | PUT | `/api/usuarios/[id]` | Editar nombre/rol/contraseña (**ADMIN**) |

@@ -42,10 +42,17 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
+    const estadoResumen = await query<{ activo: number; inactivo: number }>(
+      `SELECT
+         SUM(CASE WHEN UPPER(LTRIM(RTRIM([Estado]))) IN ('ACTIVO', 'ACT', 'A', 'SI', '1', 'TRUE') THEN 1 ELSE 0 END) AS activo,
+         SUM(CASE WHEN UPPER(LTRIM(RTRIM([Estado]))) IN ('INACTIVO', 'INA', 'I', 'NO', '0', 'FALSE') THEN 1 ELSE 0 END) AS inactivo
+       FROM ${EXPEDIENTES_SOURCE}`
+    );
+
     const porMesMap = new Map(porMesRaw.map((r) => [r.mes, r.total]));
     const porMes = ultimosMeses(12).map((mes) => ({ mes, total: porMesMap.get(mes) || 0 }));
 
-    return NextResponse.json({ estados, documentos, porMes });
+    return NextResponse.json({ estados, documentos, porMes, estadoResumen: estadoResumen[0] ?? { activo: 0, inactivo: 0 } });
   } catch (err: any) {
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }

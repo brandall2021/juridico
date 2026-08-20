@@ -15,6 +15,7 @@ type ChartData = {
   estados: { name: string; value: number }[];
   documentos: { name: string; value: number }[];
   porMes: { mes: string; total: number }[];
+  estadoResumen?: { activo: number; inactivo: number };
 };
 
 const PAGE_SIZE = 20;
@@ -243,7 +244,7 @@ export default function ExpedientesPage() {
         {source === "vista" && charts && (
           <div className="kpi-grid" style={{ marginTop: 12 }}>
             {(() => {
-              const { activo, inactivo } = buildEstadoSummary(charts.estados);
+              const { activo, inactivo } = charts.estadoResumen ?? buildEstadoSummary(charts.estados);
               return (
                 <>
                   <div className="kpi">

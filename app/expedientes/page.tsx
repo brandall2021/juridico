@@ -247,14 +247,32 @@ export default function ExpedientesPage() {
               const { activo, inactivo } = charts.estadoResumen ?? buildEstadoSummary(charts.estados);
               return (
                 <>
-                  <div className="kpi">
+                  <button
+                    type="button"
+                    className="kpi"
+                    onClick={() => {
+                      setSource("vista");
+                      setFilters((f) => ({ ...f, estado: "ACTIVO" }));
+                      setPage(1);
+                    }}
+                    style={{ textAlign: "left", border: 0, cursor: "pointer" }}
+                  >
                     <div className="num ok-num">{activo.toLocaleString()}</div>
                     <div className="label">Estado activo</div>
-                  </div>
-                  <div className="kpi">
+                  </button>
+                  <button
+                    type="button"
+                    className="kpi"
+                    onClick={() => {
+                      setSource("vista");
+                      setFilters((f) => ({ ...f, estado: "INACTIVO" }));
+                      setPage(1);
+                    }}
+                    style={{ textAlign: "left", border: 0, cursor: "pointer" }}
+                  >
                     <div className="num warn-num">{inactivo.toLocaleString()}</div>
                     <div className="label">Estado inactivo</div>
-                  </div>
+                  </button>
                 </>
               );
             })()}

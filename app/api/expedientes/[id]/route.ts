@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { EXPEDIENTES_SOURCE } from "@/lib/consulta";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
 
     const rows = await query(
-      `SELECT [Centro Judicial], [Unidad Judicial], [Expdte], [Actor], [Demandado], [Fecha], [Descripcion], [Documento], [Fecha Procesado], [Estado], CONVERT(nvarchar(max), [Historia]) AS [Historia] FROM dbo.google WHERE ${where.join(" AND ")}`,
+      `SELECT [Centro Judicial], [Unidad Judicial], [Expdte], [Actor], [Demandado], [Fecha], [Descripcion], [Documento], [Fecha Procesado], [Estado], CONVERT(nvarchar(max), [Historia]) AS [Historia] FROM ${EXPEDIENTES_SOURCE} WHERE ${where.join(" AND ")}`,
       paramsObj
     );
 

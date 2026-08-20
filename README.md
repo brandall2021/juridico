@@ -1,16 +1,16 @@
 # Expedientes Jurídicos
 
-Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judiciales y cargar registros nuevos, ya sea de forma manual o por importación de archivos CSV.
+Sistema para consultar la vista `[LegajoExpdtes].[dbo].[goolge2]` (SQL Server) de expedientes judiciales y cargar registros nuevos, ya sea de forma manual o por importación de archivos CSV.
 
 ## Características
 
-- **Consulta** de la vista `dbo.google` con filtros (centro judicial, unidad judicial, expediente, actor, demandado, estado y búsqueda general) y paginación.
+- **Consulta** de la vista `[LegajoExpdtes].[dbo].[goolge2]` con filtros (centro judicial, unidad judicial, expediente, actor, demandado, estado y búsqueda general) y paginación.
 - **Detalle** de expediente con la historia completa (campo XML `Historia`).
 - **Alta manual** de registros nuevos.
 - **Importación CSV con mapeo de columnas**: asistente en 3 pasos — subir archivo (arrastrar y soltar), mapear cada columna del CSV a los campos del sistema (con auto-sugerencia y valor de ejemplo), y confirmar con una vista previa de los primeros registros ya mapeados antes de importar. Incluye plantilla descargable.
 - **Login simple** con usuarios propios (JWT en cookie httpOnly).
 - **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
-- **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `dbo.google`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
+- **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `[LegajoExpdtes].[dbo].[goolge2]`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
 - **Maestros**: alta de Centros Judiciales (`CentrosJudiciales`) y Provincias (`Provincias`) directamente desde la app (edición/eliminación solo ADMIN).
 - **Dashboard (centro de control)**: tarjetas KPI (total de expedientes, actualizados hoy, con/sin documento, estados SI/NO/KO) y panel de alertas jurídicas con acceso directo a listados filtrados.
 - **Bandeja de expedientes**: estados SI/NO/KO como badges de color, columna Documento como enlace "Ver documento" (la URL queda oculta), detalle en panel lateral (drawer) y búsqueda global por expediente, actor, demandado o documento. En mobile la tabla se convierte en tarjetas.
@@ -28,7 +28,7 @@ Sistema para consultar la vista `dbo.google` (SQL Server) de expedientes judicia
 
 ## Requisitos
 
-- SQL Server accesible por TCP (por defecto puerto **1433**) con la vista `dbo.google`.
+- SQL Server accesible por TCP (por defecto puerto **1433**) con la vista `[LegajoExpdtes].[dbo].[goolge2]`.
 - La base de datos por defecto se llama `LegajoExpdtes`.
 
 > ⚠️ **Importante:** el servidor SQL debe tener el protocolo **TCP/IP habilitado** y el puerto 1433 abierto (SQL Server Configuration Manager → Protocols → TCP/IP → Enabled, y el puerto en `IPALL`). Sin eso la app no puede conectarse.
@@ -122,7 +122,7 @@ Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,ExpdteCenJudId,ExpdteEsta
 
 ## Carga de registros (mapeo)
 
-La vista `dbo.google` es solo lectura y combina `ExpdtesCaratula` con `CentrosJudiciales` y `ExpdtesLineas`. Al cargar un registro, la app hace el mapeo a la tabla real:
+La vista `[LegajoExpdtes].[dbo].[goolge2]` es solo lectura y combina `ExpdtesCaratula` con `CentrosJudiciales` y `ExpdtesLineas`. Al cargar un registro, la app hace el mapeo a la tabla real:
 
 | Campo del formulario/CSV | Columna en `dbo.ExpdtesCaratula` |
 |---|---|
@@ -290,12 +290,12 @@ curl -X POST https://<dokploy>/api/deploy/<refreshToken> \
 
 1. Abrir la URL de la app → debe redirigir a `/login`.
 2. Ingresar con `admin` y la contraseña configurada.
-3. Ir a `/expedientes` y probar un filtro — la tabla debe listar registros de `dbo.google`.
+3. Ir a `/expedientes` y probar un filtro — la tabla debe listar registros de `[LegajoExpdtes].[dbo].[goolge2]`.
 4. Importar un archivo CSV → los registros deben aparecer en la pestaña **Registros cargados**.
 
 ## Solución de problemas
 
 - **"Failed to connect to <host>:1433"** → el SQL Server no acepta TCP. Habilitar TCP/IP en Configuration Manager, reiniciar el servicio y abrir el firewall en 1433.
 - **Login no funciona** → verificar que el seed se haya ejecutado (tabla `app_usuarios` con `admin`).
-- **No aparecen registros** → confirmar que la vista se llame `dbo.google` en la base `LegajoExpdtes` y que existan datos.
+- **No aparecen registros** → confirmar que la vista se llame `[LegajoExpdtes].[dbo].[goolge2]` en la base `LegajoExpdtes` y que existan datos.
 - **Mixed content (http/https)** → si la app se sirve por HTTPS, todo debe ir por HTTPS. La app es fullstack (misma URL), por lo que no aplican llamadas a otra API.

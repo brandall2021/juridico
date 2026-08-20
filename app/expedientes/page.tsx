@@ -211,7 +211,7 @@ export default function ExpedientesPage() {
                 setPage(1);
               }}
             >
-              Base (dbo.google)
+              Base (goolge2)
             </button>
             <button
               className={`tab ${source === "cargados" ? "active" : ""}`}

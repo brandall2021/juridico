@@ -1,15 +1,9 @@
-export const VISTA_FIELDS = [
-  "[Centro Judicial]",
-  "[Unidad Judicial]",
-  "[Expdte]",
-  "[Actor]",
-  "[Demandado]",
-  "[Fecha]",
-  "[Descripcion]",
-  "[Documento]",
-  "[Fecha Procesado]",
-  "[Estado]",
-];
+import consultaSource from "./consulta-source.js";
+
+export const { EXPEDIENTES_SOURCE, VISTA_FIELDS } = consultaSource as {
+  EXPEDIENTES_SOURCE: string;
+  VISTA_FIELDS: string[];
+};
 
 export function buildWhere(searchParams: URLSearchParams): {
   where: string;

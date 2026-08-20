@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { EXPEDIENTES_SOURCE } from "@/lib/consulta";
 
 export const runtime = "nodejs";
 
@@ -29,10 +30,10 @@ export async function GET(req: NextRequest) {
           SUM(CASE WHEN LTRIM(RTRIM([Estado])) = 'NO' THEN 1 ELSE 0 END) AS estadoNO,
           SUM(CASE WHEN LTRIM(RTRIM([Estado])) = 'KO' THEN 1 ELSE 0 END) AS estadoKO,
           SUM(CASE WHEN [Fecha] IS NOT NULL AND DATEDIFF(day, COALESCE(TRY_CONVERT(date, [Fecha], 103), TRY_CONVERT(date, [Fecha], 120)), GETDATE()) > 365 THEN 1 ELSE 0 END) AS antiguos
-        FROM dbo.google`
+        FROM ${EXPEDIENTES_SOURCE}`
       ),
       query<{ ultima: string | null }>(
-        "SELECT MAX([Fecha Procesado]) AS ultima FROM dbo.google"
+        `SELECT MAX([Fecha Procesado]) AS ultima FROM ${EXPEDIENTES_SOURCE}`
       ),
     ]);
 

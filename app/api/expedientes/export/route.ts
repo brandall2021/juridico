@@ -4,7 +4,7 @@ import fs from "fs";
 import PDFDocument from "pdfkit";
 import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { buildWhere, VISTA_FIELDS, orderBy } from "@/lib/consulta";
+import { buildWhere, EXPEDIENTES_SOURCE, VISTA_FIELDS, orderBy } from "@/lib/consulta";
 
 export const runtime = "nodejs";
 
@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
     const maxRows = formato === "csv" ? CSV_MAX : PDF_MAX;
 
     const rows = await query(
-      `SELECT TOP (@maxRows) ${VISTA_FIELDS.join(", ")} FROM dbo.google ${where} ORDER BY ${order}`,
+      `SELECT TOP (@maxRows) ${VISTA_FIELDS.join(", ")} FROM ${EXPEDIENTES_SOURCE} ${where} ORDER BY ${order}`,
       { ...params, maxRows }
     );
 

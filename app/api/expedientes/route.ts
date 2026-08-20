@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { buildWhere, VISTA_FIELDS, orderBy } from "@/lib/consulta";
+import { buildWhere, EXPEDIENTES_SOURCE, VISTA_FIELDS, orderBy } from "@/lib/consulta";
 
 export const runtime = "nodejs";
 
@@ -19,14 +19,14 @@ export async function GET(req: NextRequest) {
     const order = orderBy(url.searchParams);
 
     const countRows = await query<{ total: number }>(
-      `SELECT COUNT(*) AS total FROM dbo.google ${where}`,
+      `SELECT COUNT(*) AS total FROM ${EXPEDIENTES_SOURCE} ${where}`,
       params
     );
     const total = countRows[0]?.total ?? 0;
 
     const fields = includeHistoria ? [...VISTA_FIELDS, "[Historia]"] : VISTA_FIELDS;
     const rows = await query(
-      `SELECT ${fields.join(", ")} FROM dbo.google ${where} ORDER BY ${order} OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
+      `SELECT ${fields.join(", ")} FROM ${EXPEDIENTES_SOURCE} ${where} ORDER BY ${order} OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
       { ...params, offset, pageSize }
     );
 

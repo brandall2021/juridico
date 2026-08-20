@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { EXPEDIENTES_SOURCE } from "@/lib/consulta";
 
 export const runtime = "nodejs";
 
@@ -25,15 +26,15 @@ export async function GET(req: NextRequest) {
     const [estados, documentos, porMesRaw] = await Promise.all([
       query<{ nombre: string; value: number }>(
         `SELECT CASE LTRIM(RTRIM([Estado])) WHEN 'SI' THEN 'SI' WHEN 'NO' THEN 'NO' WHEN 'KO' THEN 'KO' ELSE 'Otro' END AS nombre, COUNT(*) AS value
-         FROM dbo.google GROUP BY CASE LTRIM(RTRIM([Estado])) WHEN 'SI' THEN 'SI' WHEN 'NO' THEN 'NO' WHEN 'KO' THEN 'KO' ELSE 'Otro' END`
+          FROM ${EXPEDIENTES_SOURCE} GROUP BY CASE LTRIM(RTRIM([Estado])) WHEN 'SI' THEN 'SI' WHEN 'NO' THEN 'NO' WHEN 'KO' THEN 'KO' ELSE 'Otro' END`
       ),
       query<{ nombre: string; value: number }>(
         `SELECT CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 'Con documento' ELSE 'Sin documento' END AS nombre, COUNT(*) AS value
-         FROM dbo.google GROUP BY CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 'Con documento' ELSE 'Sin documento' END`
+         FROM ${EXPEDIENTES_SOURCE} GROUP BY CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 'Con documento' ELSE 'Sin documento' END`
       ),
       query<{ mes: string; total: number }>(
         `SELECT CONVERT(VARCHAR(7), ${FECHA_FP}, 120) AS mes, COUNT(*) AS total
-         FROM dbo.google
+         FROM ${EXPEDIENTES_SOURCE}
          WHERE ${FECHA_FP} IS NOT NULL
          GROUP BY CONVERT(VARCHAR(7), ${FECHA_FP}, 120)`
       ),

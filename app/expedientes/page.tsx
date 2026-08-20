@@ -7,9 +7,15 @@ import AuthGuard from "@/components/AuthGuard";
 import KpiCards, { type Kpis } from "@/components/KpiCards";
 import DocumentoCell, { docHref } from "@/components/DocumentoCell";
 import { api } from "@/lib/client";
+import { buildEstadoSummary } from "@/lib/dashboard-data.js";
 
 type Row = Record<string, any>;
 type Source = "vista" | "cargados";
+type ChartData = {
+  estados: { name: string; value: number }[];
+  documentos: { name: string; value: number }[];
+  porMes: { mes: string; total: number }[];
+};
 
 const PAGE_SIZE = 20;
 
@@ -68,6 +74,7 @@ export default function ExpedientesPage() {
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Row | null>(null);
   const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [charts, setCharts] = useState<ChartData | null>(null);
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({
     key: "expediente",
     dir: "asc",
@@ -78,6 +85,10 @@ export default function ExpedientesPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then(setKpis)
       .catch(() => setKpis(null));
+    fetch("/api/expedientes/charts", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setCharts)
+      .catch(() => setCharts(null));
   }, []);
 
   useEffect(() => {
@@ -228,6 +239,26 @@ export default function ExpedientesPage() {
         </div>
 
         {source === "vista" && kpis && <KpiCards kpis={kpis} />}
+
+        {source === "vista" && charts && (
+          <div className="kpi-grid" style={{ marginTop: 12 }}>
+            {(() => {
+              const { activo, inactivo } = buildEstadoSummary(charts.estados);
+              return (
+                <>
+                  <div className="kpi">
+                    <div className="num ok-num">{activo.toLocaleString()}</div>
+                    <div className="label">Estado activo</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="num warn-num">{inactivo.toLocaleString()}</div>
+                    <div className="label">Estado inactivo</div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
 
         <form className="search-bar" onSubmit={buscar}>
           <input

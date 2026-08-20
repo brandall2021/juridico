@@ -10,7 +10,18 @@ test('buildEstadoChartData keeps real estado values', () => {
     { name: '', value: 1 },
   ]);
 
-  assert.deepEqual(data.map((d) => d.name), ['ACTIVO', 'PENDIENTE', 'Sin estado']);
+  assert.deepEqual(data.map((d) => d.name), ['Activo', 'PENDIENTE', 'Sin estado']);
   assert.equal(data[0].color, '#3b82f6');
   assert.equal(data[1].color, '#22c55e');
+});
+
+test('buildEstadoSummary maps active and inactive counts', () => {
+  const { buildEstadoSummary } = require('../lib/dashboard-data.js');
+
+  const summary = buildEstadoSummary([
+    { name: 'ACTIVO', value: 7 },
+    { name: 'INACTIVO', value: 3 },
+  ]);
+
+  assert.deepEqual(summary, { activo: 7, inactivo: 3 });
 });

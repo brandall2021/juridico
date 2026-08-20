@@ -25,8 +25,10 @@ export async function GET(req: NextRequest) {
   try {
     const [estados, documentos, porMesRaw] = await Promise.all([
       query<{ nombre: string; value: number }>(
-        `SELECT CASE LTRIM(RTRIM([Estado])) WHEN 'SI' THEN 'SI' WHEN 'NO' THEN 'NO' WHEN 'KO' THEN 'KO' ELSE 'Otro' END AS nombre, COUNT(*) AS value
-          FROM ${EXPEDIENTES_SOURCE} GROUP BY CASE LTRIM(RTRIM([Estado])) WHEN 'SI' THEN 'SI' WHEN 'NO' THEN 'NO' WHEN 'KO' THEN 'KO' ELSE 'Otro' END`
+        `SELECT COALESCE(NULLIF(LTRIM(RTRIM([Estado])), ''), 'Sin estado') AS nombre, COUNT(*) AS value
+          FROM ${EXPEDIENTES_SOURCE}
+          GROUP BY COALESCE(NULLIF(LTRIM(RTRIM([Estado])), ''), 'Sin estado')
+          ORDER BY COUNT(*) DESC, nombre ASC`
       ),
       query<{ nombre: string; value: number }>(
         `SELECT CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 'Con documento' ELSE 'Sin documento' END AS nombre, COUNT(*) AS value

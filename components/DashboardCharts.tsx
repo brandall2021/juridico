@@ -14,13 +14,12 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { buildEstadoChartData } from "@/lib/dashboard-data.js";
 
 const C = {
-  ok: "#22c55e",
-  warn: "#f59e0b",
-  danger: "#ef4444",
   azul: "#3b82f6",
   azulClaro: "#60a5fa",
+  warn: "#f59e0b",
 };
 
 const tooltipStyle = {
@@ -73,8 +72,7 @@ export default function DashboardCharts({
   alertas: Datum[];
 }) {
   const totalEstados = estados.reduce((a, b) => a + b.value, 0);
-  const estColor: Record<string, string> = { SI: C.ok, NO: C.warn, KO: C.danger };
-  const estadosData = estados.map((e) => ({ ...e, color: estColor[e.name] || C.azul }));
+  const estadosData = buildEstadoChartData(estados) as (Datum & { color: string })[];
   const docData = documentos.map((d, i) => ({ ...d, color: i === 0 ? C.azul : C.azulClaro }));
   const alertData = alertas.map((a) => ({ ...a, color: a.color || C.warn }));
 

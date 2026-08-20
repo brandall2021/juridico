@@ -3,9 +3,6 @@ export type Kpis = {
   actualizadosHoy: number;
   conDocumento: number;
   sinDocumento: number;
-  estadoSI: number;
-  estadoNO: number;
-  estadoKO: number;
   antiguos: number;
   ultimaActualizacion: string | null;
 };
@@ -34,16 +31,8 @@ export default function KpiCards({ kpis }: { kpis: Kpis }) {
         <div className="label">Sin documento</div>
       </div>
       <div className="kpi">
-        <div className="num ok-num">{kpis.estadoSI.toLocaleString()}</div>
-        <div className="label">Estado SI</div>
-      </div>
-      <div className="kpi">
-        <div className="num warn-num">{kpis.estadoNO.toLocaleString()}</div>
-        <div className="label">Estado NO</div>
-      </div>
-      <div className="kpi">
-        <div className="num danger-num">{kpis.estadoKO.toLocaleString()}</div>
-        <div className="label">Estado KO</div>
+        <div className="num">{kpis.antiguos.toLocaleString()}</div>
+        <div className="label">Antiguos</div>
       </div>
     </div>
   );

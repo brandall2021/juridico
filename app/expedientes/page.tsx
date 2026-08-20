@@ -5,7 +5,6 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import AuthGuard from "@/components/AuthGuard";
 import KpiCards, { type Kpis } from "@/components/KpiCards";
-import EstadoBadge from "@/components/EstadoBadge";
 import DocumentoCell, { docHref } from "@/components/DocumentoCell";
 import { api } from "@/lib/client";
 
@@ -178,23 +177,13 @@ export default function ExpedientesPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const filtroEstado = source === "vista" ? (
-    <div className="field">
-      <label>Estado</label>
-      <select value={filters["estado"] || ""} onChange={(e) => aplicarFiltro("estado", e.target.value)}>
-        <option value="">Todos</option>
-        <option value="SI">SI</option>
-        <option value="NO">NO</option>
-        <option value="KO">KO</option>
-      </select>
-    </div>
-  ) : (
+  const estadoField = (
     <div className="field">
       <label>Estado</label>
       <input
         value={filters["estado"] || ""}
         onChange={(e) => aplicarFiltro("estado", e.target.value)}
-        placeholder="SI / NO / KO…"
+        placeholder="Buscar estado…"
       />
     </div>
   );
@@ -276,9 +265,9 @@ export default function ExpedientesPage() {
                   />
                 </div>
               ))}
-              {filtroEstado}
+                {estadoField}
+              </div>
             </div>
-          </div>
         )}
 
         {error && <div className="alert error">{error}</div>}
@@ -288,15 +277,15 @@ export default function ExpedientesPage() {
 
         {rows.length > 0 && (
           <>
-            <div className="table-wrap">
-              <table className="table-desktop">
+              <div className="table-wrap">
+                <table className="table-desktop">
                 <thead>
                   <tr>
-                    {source === "vista" ? (
-                      SORTABLE.map((s) => (
-                        <Th key={s.key} sortKey={s.key} label={s.label} sort={sort} onSort={ordenar} />
-                      ))
-                    ) : (
+                      {source === "vista" ? (
+                        SORTABLE.map((s) => (
+                          <Th key={s.key} sortKey={s.key} label={s.label} sort={sort} onSort={ordenar} />
+                        ))
+                      ) : (
                       <>
                         <th>Expediente</th>
                         <th>Actor</th>
@@ -327,7 +316,7 @@ export default function ExpedientesPage() {
                       <td>{row["Fecha"] ?? ""}</td>
                       <td>{row["Fecha Procesado"] ?? ""}</td>
                       <td>
-                        <EstadoBadge estado={row["Estado"]} />
+                        {row["Estado"] ?? "—"}
                       </td>
                       <td>
                         <DocumentoCell doc={row["Documento"]} />
@@ -356,7 +345,7 @@ export default function ExpedientesPage() {
                   <div className="card" key={i}>
                     <div className="card-head">
                       <span className="mono" style={{ fontWeight: 600 }}>{row["Expdte"] ?? ""}</span>
-                      <EstadoBadge estado={row["Estado"]} />
+                      <span className="badge soft">{row["Estado"] || "—"}</span>
                     </div>
                     <div className="card-row">
                       <span>Actor</span>
@@ -431,43 +420,37 @@ export default function ExpedientesPage() {
                 </button>
               </div>
               <div className="drawer-body">
-                <div style={{ marginBottom: 14 }}>
-                  <EstadoBadge estado={detalle["Estado"]} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
+                  {[
+                    ["Centro Judicial", detalle["Centro Judicial"] || "—"],
+                    ["Unidad Judicial", detalle["Unidad Judicial"] || "—"],
+                    ["Actor", detalle["Actor"] || "—"],
+                    ["Demandado", detalle["Demandado"] || "—"],
+                    ["Estado", detalle["Estado"] || "—"],
+                    ["Último movimiento", detalle["Fecha"] || "—"],
+                    ["Fecha procesado", detalle["Fecha Procesado"] || "—"],
+                    [
+                      "Documento",
+                      detalle["Documento"] ? (
+                        <a href={docHref(detalle["Documento"])} target="_blank" rel="noreferrer">
+                          Abrir documento
+                        </a>
+                      ) : (
+                        <span className="badge soft">Sin documento</span>
+                      ),
+                    ],
+                    ["Descripción", detalle["Descripcion"] || "—"],
+                    [
+                      "Historia (XML)",
+                      detalle["Historia"] ? <pre className="xml-pre">{detalle["Historia"]}</pre> : "—",
+                    ],
+                  ].map(([label, value]) => (
+                    <div className="field" key={String(label)}>
+                      <label>{label}</label>
+                      <div>{value as any}</div>
+                    </div>
+                  ))}
                 </div>
-                <dl className="dl">
-                  <dt>Centro Judicial</dt>
-                  <dd>{detalle["Centro Judicial"] || "—"}</dd>
-                  <dt>Unidad Judicial</dt>
-                  <dd>{detalle["Unidad Judicial"] || "—"}</dd>
-                  <dt>Actor</dt>
-                  <dd>{detalle["Actor"] || "—"}</dd>
-                  <dt>Demandado</dt>
-                  <dd>{detalle["Demandado"] || "—"}</dd>
-                  <dt>Último movimiento</dt>
-                  <dd>{detalle["Fecha"] || "—"}</dd>
-                  <dt>Fecha procesado</dt>
-                  <dd>{detalle["Fecha Procesado"] || "—"}</dd>
-                  <dt>Documento</dt>
-                  <dd>
-                    {detalle["Documento"] ? (
-                      <a href={docHref(detalle["Documento"])} target="_blank" rel="noreferrer">
-                        Abrir documento
-                      </a>
-                    ) : (
-                      <span className="badge soft">Sin documento</span>
-                    )}
-                  </dd>
-                </dl>
-                <div className="field" style={{ marginTop: 16 }}>
-                  <label>Descripción</label>
-                  <div>{detalle["Descripcion"] || "—"}</div>
-                </div>
-                {detalle["Historia"] && (
-                  <div className="field" style={{ marginTop: 16 }}>
-                    <label>Historia (XML)</label>
-                    <pre className="xml-pre">{detalle["Historia"]}</pre>
-                  </div>
-                )}
               </div>
             </aside>
           </div>

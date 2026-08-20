@@ -58,20 +58,6 @@ export default function DashboardPage() {
               <aside className="alerts">
                 <h3 style={{ fontSize: 15, marginBottom: 12 }}>Alertas</h3>
 
-                {kpis.estadoKO > 0 && (
-                  <a href={`/expedientes?${qs({ estado: "KO" })}`} className="alert-card danger">
-                    <b>{kpis.estadoKO.toLocaleString()} expedientes en estado KO</b>
-                    <span>Revisar — posibles inconsistencias o errores de carga.</span>
-                  </a>
-                )}
-
-                {kpis.estadoNO > 0 && (
-                  <a href={`/expedientes?${qs({ estado: "NO" })}`} className="alert-card warn">
-                    <b>{kpis.estadoNO.toLocaleString()} expedientes sin actualizar</b>
-                    <span>Estado NO — pendientes de actualización.</span>
-                  </a>
-                )}
-
                 {kpis.sinDocumento > 0 && (
                   <a href="/expedientes" className="alert-card warn">
                     <b>{kpis.sinDocumento.toLocaleString()} sin documento digitalizado</b>
@@ -93,7 +79,7 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {kpis.estadoKO === 0 && kpis.estadoNO === 0 && kpis.sinDocumento === 0 && kpis.antiguos === 0 && (
+                {kpis.sinDocumento === 0 && kpis.antiguos === 0 && (
                   <div className="alert-card ok">
                     <b>Sin alertas pendientes</b>
                     <span>Todos los expedientes están al día.</span>
@@ -102,13 +88,11 @@ export default function DashboardPage() {
               </aside>
             </div>
 
-            <DashboardCharts
-              estados={charts.estados}
-              documentos={charts.documentos}
-              porMes={charts.porMes}
-              alertas={[
-                { name: "Estado KO", value: kpis.estadoKO, color: "#ef4444" },
-                { name: "Sin actualizar", value: kpis.estadoNO, color: "#f59e0b" },
+              <DashboardCharts
+                estados={charts.estados}
+                documentos={charts.documentos}
+                porMes={charts.porMes}
+                alertas={[
                 { name: "Sin documento", value: kpis.sinDocumento, color: "#f59e0b" },
                 { name: "Movimientos antiguos", value: kpis.antiguos, color: "#f59e0b" },
               ]}

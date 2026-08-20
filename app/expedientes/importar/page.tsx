@@ -161,7 +161,7 @@ export default function ImportarPage() {
             (obligatorio, 10 chars, ej. <em>ACTIVO</em>); la <code>Carátula</code> se genera automáticamente
             como <em>Actor C/ Demandado</em>. Los campos <code>Fecha</code>, <code>Descripción</code>, <code>Fecha Procesado</code>,
             <code>Carátula</code> e <code>Historia</code> no se importan. Si el archivo tiene una columna
-            <code>Estado actualizado</code> o <code>ExpdteActualizado</code> (SI/NO/KO), se guarda como "actualizado".
+            <code>Estado actualizado</code> o <code>ExpdteActualizado</code>, se guarda como "actualizado".
             Una columna llamada <code>Estado</code> se interpreta como <code>ExpdteEstado</code>.
           </p>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={descargarPlantilla}>

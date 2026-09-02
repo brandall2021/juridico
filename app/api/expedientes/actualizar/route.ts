@@ -1,6 +1,6 @@
 import sql from "mssql";
 import { NextRequest, NextResponse } from "next/server";
-import { getPool, query } from "@/lib/db";
+import { getPool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { buildBulkUpdateSql, parseBulkUpdateCsv } from "@/lib/expedientes-actualizacion.js";
 import { registrarCarga } from "@/lib/expedientes";
@@ -11,25 +11,25 @@ export async function POST(req: NextRequest) {
   const { session, response } = requireAuth(req);
   if (response) return response;
 
-  try {
-    const formData = await req.formData();
-    const file = formData.get("file");
+    try {
+      const formData = await req.formData();
+      const file = formData.get("file");
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Archivo CSV requerido (campo 'file')" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const { records, errors } = await parseBulkUpdateCsv(buffer);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const { records, errors } = await parseBulkUpdateCsv(buffer);
 
     if (records.length === 0) {
       return NextResponse.json({ error: "No se encontraron registros válidos en el CSV", errors }, { status: 400 });
     }
 
-    const pool = await getPool();
-    const tx = new sql.Transaction(pool);
-    await tx.begin();
+      const pool = await getPool();
+      const tx = new sql.Transaction(pool);
+      await tx.begin();
 
-    try {
+      try {
       const centroRows = await tx.request().query(
         "SELECT CentroJudId, CentroJudPvciaId FROM dbo.CentrosJudiciales"
       );
@@ -48,33 +48,55 @@ export async function POST(req: NextRequest) {
         provinciaMap.set(String(row.ProvinciaId).trim(), String(row.ProvinciaNombre));
       }
 
-      let updated = 0;
-      const rowErrors: string[] = [];
+        let updated = 0;
+        const rowErrors: string[] = [];
 
-      for (const row of records) {
-        const expdte = (row.expdte ?? "").trim();
-        try {
+        for (const row of records) {
+          const expdte = (row.expdte ?? "").trim();
+          try {
           const cenJudIdRaw = (row.centroJudId ?? "").trim();
-          const cenJudId = Number(cenJudIdRaw);
-          if (!Number.isInteger(cenJudId)) throw new Error(`CentroJudId inválido: "${cenJudIdRaw}"`);
+          const provincia = (() => {
+            if (!cenJudIdRaw) return undefined;
+            const cenJudId = Number(cenJudIdRaw);
+            if (!Number.isInteger(cenJudId)) throw new Error(`CentroJudId inválido: "${cenJudIdRaw}"`);
 
-          const centro = centroById.get(cenJudId);
-          if (!centro) throw new Error(`centro judicial no encontrado: ID ${cenJudIdRaw}`);
+            const centro = centroById.get(cenJudId);
+            if (!centro) throw new Error(`centro judicial no encontrado: ID ${cenJudIdRaw}`);
 
-          const provincia = provinciaMap.get(String(centro.CentroJudPvciaId).trim()) || "Tucumán";
+            return provinciaMap.get(String(centro.CentroJudPvciaId).trim()) || "Tucumán";
+          })();
+
           const built = buildBulkUpdateSql(row, provincia);
+          if (!built.sql) continue;
+          const params = built.params as Record<string, unknown>;
+          const request = tx.request().input("expdte", sql.VarChar, params.expdte as string);
 
-          const result = await tx.request()
-            .input("expdte", sql.VarChar, built.params.expdte)
-            .input("cenJudId", sql.Numeric, built.params.cenJudId)
-            .input("unidadJudicial", sql.VarChar, built.params.unidadJudicial)
-            .input("provincia", sql.VarChar, built.params.provincia)
-            .input("caratula", sql.VarChar, built.params.caratula)
-            .input("actor", sql.VarChar, built.params.actor)
-            .input("demandado", sql.VarChar, built.params.demandado)
-            .input("codEstado", sql.Char(3), built.params.codEstado)
-            .input("estado", sql.NVarChar, built.params.estado)
-            .query(built.sql);
+          if (Object.prototype.hasOwnProperty.call(params, "cenJudId")) {
+            request.input("cenJudId", sql.Numeric, params.cenJudId as number);
+          }
+          if (Object.prototype.hasOwnProperty.call(params, "unidadJudicial")) {
+            request.input("unidadJudicial", sql.VarChar, params.unidadJudicial as string);
+          }
+          if (Object.prototype.hasOwnProperty.call(params, "provincia")) {
+            request.input("provincia", sql.VarChar, params.provincia as string);
+          }
+          if (Object.prototype.hasOwnProperty.call(params, "caratula")) {
+            request.input("caratula", sql.VarChar, params.caratula as string);
+          }
+          if (Object.prototype.hasOwnProperty.call(params, "actor")) {
+            request.input("actor", sql.VarChar, params.actor as string);
+          }
+          if (Object.prototype.hasOwnProperty.call(params, "demandado")) {
+            request.input("demandado", sql.VarChar, params.demandado as string);
+          }
+          if (Object.prototype.hasOwnProperty.call(params, "codEstado")) {
+            request.input("codEstado", sql.Char(3), params.codEstado as string);
+          }
+          if (Object.prototype.hasOwnProperty.call(params, "estado")) {
+            request.input("estado", sql.NVarChar, params.estado as string);
+          }
+
+          const result = await request.query(built.sql);
 
           if ((result.rowsAffected?.[0] ?? 0) === 0) {
             rowErrors.push(`Expediente "${expdte}": no existe un registro para actualizar`);

@@ -227,6 +227,9 @@ export default function ExpedientesPage() {
           <Link href="/expedientes/importar" className="btn btn-ghost btn-sm">
             Importar CSV
           </Link>
+          <Link href="/expedientes/actualizar" className="btn btn-ghost btn-sm">
+            Actualizar CSV
+          </Link>
           {source === "vista" && (
             <>
               <a href={exportUrl("csv")} className="btn btn-ghost btn-sm" download>

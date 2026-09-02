@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FolderOpen, Upload, FileArchive, Building2, MapPin, Table2, Users } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Upload, FileArchive, Building2, MapPin, Table2, Users, RotateCcw } from "lucide-react";
 import { getMe } from "@/lib/client";
 import type { Kpis } from "@/components/KpiCards";
 
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/expedientes", label: "Expedientes", Icon: FolderOpen },
   { href: "/caratula", label: "Carátula", Icon: Table2 },
   { href: "/expedientes/importar", label: "Importar CSV", Icon: Upload },
+  { href: "/expedientes/actualizar", label: "Actualizar CSV", Icon: RotateCcw },
   { href: "/expedientes/archivos", label: "Archivos subidos", Icon: FileArchive },
   { href: "/centros", label: "Centros", Icon: Building2 },
   { href: "/provincias", label: "Provincias", Icon: MapPin },

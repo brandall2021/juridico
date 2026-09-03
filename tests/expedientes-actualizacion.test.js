@@ -115,11 +115,14 @@ test('processBulkUpdateRows stops on the first row error with context', async ()
         input() {
           return this;
         },
-        query() {
+        query(sqlText) {
+          tx.calls += 1;
+          if (tx.calls === 1) return { recordset: [{ mx: 1 }] };
           throw new Error('Transaction has been aborted.');
         },
       };
     },
+    calls: 0,
   };
 
   await assert.rejects(
@@ -132,4 +135,40 @@ test('processBulkUpdateRows stops on the first row error with context', async ()
       }),
     /Expediente "EXP-001": Transaction has been aborted\./
   );
+});
+
+test('processBulkUpdateRows inserts the row when the update does not find it', async () => {
+  const { processBulkUpdateRows } = require('../lib/expedientes-actualizacion.js');
+
+  const queries = [];
+  const tx = {
+    request() {
+      const state = { inputs: [] };
+      return {
+        input(name, value) {
+          state.inputs.push([name, value]);
+          return this;
+        },
+        async query(sqlText) {
+          queries.push(sqlText);
+          tx.calls += 1;
+          if (tx.calls === 1) return { recordset: [{ mx: 10 }] };
+          if (sqlText.startsWith('UPDATE')) return { rowsAffected: [0] };
+          return { rowsAffected: [1] };
+        },
+      };
+    },
+    calls: 0,
+  };
+
+  const result = await processBulkUpdateRows({
+    tx,
+    records: [{ expdte: 'EXP-001', centroJudId: '12', actor: 'Ana', demandado: 'Gomez' }],
+    centroById: new Map([[12, { CentroJudId: 12, CentroJudPvciaId: '1' }]]),
+    centroByName: new Map(),
+    provinciaMap: new Map([['1', 'Tucumán']]),
+  });
+
+  assert.equal(result.updated, 1);
+  assert.equal(queries.some((sqlText) => sqlText.startsWith('INSERT INTO dbo.ExpdtesCaratula')), true);
 });

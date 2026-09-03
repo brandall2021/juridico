@@ -31,16 +31,23 @@ export async function POST(req: NextRequest) {
 
       try {
         const centroRows = await tx.request().query(
-          "SELECT CentroJudId, CentroJudPvciaId FROM dbo.CentrosJudiciales"
+          "SELECT CentroJudId, CentroJudNombre, CentroJudUnidad, CentroJudPvciaId FROM dbo.CentrosJudiciales"
         );
         const provinciaRows = await tx.request().query(
           "SELECT ProvinciaId, RTRIM(ProvinciaNombre) AS ProvinciaNombre FROM dbo.Provincias"
         );
 
         const centroById = new Map<number, { CentroJudId: number; CentroJudPvciaId: string }>();
+        const centroByName = new Map<string, { CentroJudId: number; CentroJudPvciaId: string }>();
         for (const row of centroRows.recordset) {
           const id = Number(row.CentroJudId);
-          centroById.set(id, { CentroJudId: id, CentroJudPvciaId: String(row.CentroJudPvciaId) });
+          const pvcia = String(row.CentroJudPvciaId);
+          const entry = { CentroJudId: id, CentroJudPvciaId: pvcia };
+          centroById.set(id, entry);
+          centroByName.set(
+            `${String(row.CentroJudNombre).trim()}|${String(row.CentroJudUnidad).trim()}`,
+            entry
+          );
         }
 
         const provinciaMap = new Map<string, string>();
@@ -52,6 +59,7 @@ export async function POST(req: NextRequest) {
           tx,
           records,
           centroById,
+          centroByName,
           provinciaMap,
         });
 

@@ -105,3 +105,31 @@ test('buildBulkUpdateSql returns a no-op for expdte-only rows', () => {
   assert.equal(result.sql, null);
   assert.deepEqual(result.params, { expdte: 'EXP-001' });
 });
+
+test('processBulkUpdateRows stops on the first row error with context', async () => {
+  const { processBulkUpdateRows } = require('../lib/expedientes-actualizacion.js');
+
+  const tx = {
+    request() {
+      return {
+        input() {
+          return this;
+        },
+        query() {
+          throw new Error('Transaction has been aborted.');
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      processBulkUpdateRows({
+        tx,
+        records: [{ expdte: 'EXP-001', centroJudId: '12', actor: 'Ana' }],
+        centroById: new Map([[12, { CentroJudId: 12, CentroJudPvciaId: '1' }]]),
+        provinciaMap: new Map([['1', 'Tucumán']]),
+      }),
+    /Expediente "EXP-001": Transaction has been aborted\./
+  );
+});

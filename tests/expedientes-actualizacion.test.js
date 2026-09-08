@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-test('parseBulkUpdateCsv normalizes the bulk update headers', async () => {
+test('parseBulkUpdateCsv keeps only the update fields', async () => {
   const { parseBulkUpdateCsv } = require('../lib/expedientes-actualizacion.js');
 
   const csv = [
@@ -13,100 +13,88 @@ test('parseBulkUpdateCsv normalizes the bulk update headers', async () => {
 
   assert.equal(result.total, 1);
   assert.deepEqual(result.records[0], {
-    centroJudId: '12',
-    centroJudicial: 'Capital',
-    unidadJudicial: 'Unidad 1',
     expdte: 'EXP-001',
-    actor: 'Ana',
-    demandado: 'Gomez',
     codEstado: 'ACT',
     estado: 'Activo',
   });
 });
 
-test('buildBulkUpdateSql overwrites the expediente row by expdte', () => {
+test('buildBulkUpdateSql updates only expediente status fields', () => {
   const { buildBulkUpdateSql } = require('../lib/expedientes-actualizacion.js');
 
   const result = buildBulkUpdateSql({
-    centroJudId: ' 12 ',
-    unidadJudicial: '  Unidad 1 ',
     expdte: ' EXP-001 ',
-    actor: ' Ana ',
-    demandado: ' Gomez ',
     codEstado: ' ACT ',
     estado: ' ACTIVO ',
   });
 
-  assert.equal(result.sql.includes('ExpdteCenJudId = @cenJudId'), true);
-  assert.equal(result.sql.includes('ExpdteUnidadJud = @unidadJudicial'), true);
-  assert.equal(result.sql.includes('ExpdteActor = @actor'), true);
-  assert.equal(result.sql.includes('ExpdteDemandado = @demandado'), true);
-  assert.equal(result.sql.includes('ExpdteCaratula = @caratula'), true);
   assert.equal(result.sql.includes('ExpdteEstado = @codEstado'), true);
   assert.equal(result.sql.includes('ExpdteEstadoNombre = @estado'), true);
   assert.equal(result.sql.includes('WHERE RTRIM(ExpdteNro) = @expdte'), true);
-  assert.equal(result.params.cenJudId, 12);
   assert.equal(result.params.expdte, 'EXP-001');
-  assert.equal(result.params.caratula, 'Ana C/ Gomez');
+  assert.equal(result.params.codEstado, 'ACT');
   assert.equal(result.params.estado, 'ACTIVO');
+  assert.equal(Object.prototype.hasOwnProperty.call(result.params, 'cenJudId'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.params, 'actor'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.params, 'demandado'), false);
 });
 
-test('parseBulkUpdateCsv allows rows with only expdte and optional fields', async () => {
+test('parseBulkUpdateCsv requires expdte codestado and estado', async () => {
   const { parseBulkUpdateCsv } = require('../lib/expedientes-actualizacion.js');
 
   const csv = [
-    'Expdte,Actor',
-    'EXP-001,Ana',
+    'Expdte,CodEstado,Estado',
+    'EXP-001,ACT,Activo',
   ].join('\n');
 
   const result = await parseBulkUpdateCsv(Buffer.from(csv, 'utf8'));
 
   assert.equal(result.errors.length, 0);
   assert.deepEqual(result.records[0], {
-    centroJudId: null,
-    centroJudicial: null,
-    unidadJudicial: null,
     expdte: 'EXP-001',
-    actor: 'Ana',
-    demandado: null,
-    codEstado: null,
-    estado: null,
+    codEstado: 'ACT',
+    estado: 'Activo',
   });
 });
 
-test('buildBulkUpdateSql only updates fields that are present', () => {
+test('buildBulkUpdateSql rejects rows missing status fields', () => {
   const { buildBulkUpdateSql } = require('../lib/expedientes-actualizacion.js');
 
-  const result = buildBulkUpdateSql({
-    expdte: 'EXP-001',
-    actor: 'Ana',
-  });
-
-  assert.equal(result.sql.includes('ExpdteActor = @actor'), true);
-  assert.equal(result.sql.includes('ExpdteDemandado = @demandado'), false);
-  assert.equal(result.sql.includes('ExpdteCenJudId = @cenJudId'), false);
-  assert.equal(result.sql.includes('ExpdteUnidadJud = @unidadJudicial'), false);
-  assert.equal(result.sql.includes('ExpdteProvinciaNombre = @provincia'), false);
-  assert.equal(result.sql.includes('ExpdteCaratula = @caratula'), false);
-  assert.equal(result.sql.includes('ExpdteEstado = @codEstado'), false);
-  assert.equal(result.sql.includes('ExpdteEstadoNombre = @estado'), false);
-  assert.equal(result.params.expdte, 'EXP-001');
-  assert.equal(result.params.actor, 'Ana');
-  assert.equal(Object.prototype.hasOwnProperty.call(result.params, 'demandado'), false);
+  assert.throws(() => buildBulkUpdateSql({ expdte: 'EXP-001' }), /falta CodEstado o Estado/);
 });
 
-test('buildBulkUpdateSql returns a no-op for expdte-only rows', () => {
-  const { buildBulkUpdateSql } = require('../lib/expedientes-actualizacion.js');
+test('processBulkUpdateRows updates status fields for the found expediente', async () => {
+  const { processBulkUpdateRows } = require('../lib/expedientes-actualizacion.js');
 
-  const result = buildBulkUpdateSql({
-    expdte: 'EXP-001',
+  const queries = [];
+  const tx = {
+    request() {
+      return {
+        input() {
+          return this;
+        },
+        query(sqlText) {
+          queries.push(sqlText);
+          return { rowsAffected: [1] };
+        },
+      };
+    },
+  };
+
+  const result = await processBulkUpdateRows({
+    tx,
+    records: [{ expdte: 'EXP-001', codEstado: 'ACT', estado: 'Activo' }],
   });
 
-  assert.equal(result.sql, null);
-  assert.deepEqual(result.params, { expdte: 'EXP-001' });
+  assert.equal(result.updated, 1);
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0].includes('ExpdteEstado = @codEstado'), true);
+  assert.equal(queries[0].includes('ExpdteEstadoNombre = @estado'), true);
+  assert.equal(queries[0].includes('ExpdteActor'), false);
+  assert.equal(queries[0].includes('ExpdteCenJudId'), false);
 });
 
-test('processBulkUpdateRows stops on the first row error with context', async () => {
+test('processBulkUpdateRows rejects rows without status fields', async () => {
   const { processBulkUpdateRows } = require('../lib/expedientes-actualizacion.js');
 
   const tx = {
@@ -115,60 +103,21 @@ test('processBulkUpdateRows stops on the first row error with context', async ()
         input() {
           return this;
         },
-        query(sqlText) {
-          tx.calls += 1;
-          if (tx.calls === 1) return { recordset: [{ mx: 1 }] };
-          throw new Error('Transaction has been aborted.');
+        async query() {
+          return { recordset: [{ mx: 10 }] };
         },
       };
     },
-    calls: 0,
   };
 
   await assert.rejects(
     () =>
       processBulkUpdateRows({
         tx,
-        records: [{ expdte: 'EXP-001', centroJudId: '12', actor: 'Ana' }],
-        centroById: new Map([[12, { CentroJudId: 12, CentroJudPvciaId: '1' }]]),
-        provinciaMap: new Map([['1', 'Tucumán']]),
+        records: [{ expdte: 'EXP-001' }],
+        centroById: new Map(),
+        provinciaMap: new Map(),
       }),
-    /Expediente "EXP-001": Transaction has been aborted\./
+    /Expediente "EXP-001": falta CodEstado o Estado/
   );
-});
-
-test('processBulkUpdateRows inserts the row when the update does not find it', async () => {
-  const { processBulkUpdateRows } = require('../lib/expedientes-actualizacion.js');
-
-  const queries = [];
-  const tx = {
-    request() {
-      const state = { inputs: [] };
-      return {
-        input(name, value) {
-          state.inputs.push([name, value]);
-          return this;
-        },
-        async query(sqlText) {
-          queries.push(sqlText);
-          tx.calls += 1;
-          if (tx.calls === 1) return { recordset: [{ mx: 10 }] };
-          if (sqlText.startsWith('UPDATE')) return { rowsAffected: [0] };
-          return { rowsAffected: [1] };
-        },
-      };
-    },
-    calls: 0,
-  };
-
-  const result = await processBulkUpdateRows({
-    tx,
-    records: [{ expdte: 'EXP-001', centroJudId: '12', actor: 'Ana', demandado: 'Gomez' }],
-    centroById: new Map([[12, { CentroJudId: 12, CentroJudPvciaId: '1' }]]),
-    centroByName: new Map(),
-    provinciaMap: new Map([['1', 'Tucumán']]),
-  });
-
-  assert.equal(result.updated, 1);
-  assert.equal(queries.some((sqlText) => sqlText.startsWith('INSERT INTO dbo.ExpdtesCaratula')), true);
 });

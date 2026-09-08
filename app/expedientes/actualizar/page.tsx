@@ -21,7 +21,7 @@ type Preview = {
 };
 
 const TEMPLATE_HEADER =
-  "CentroJudId,Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,CodEstado,Estado atraves de expdte";
+  "Expdte,CodEstado,Estado atraves de expdte";
 
 export default function ActualizarExpedientesPage() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -110,9 +110,8 @@ export default function ActualizarExpedientesPage() {
         <div className="toolbar" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 16 }}>Actualizar CSV de expedientes</h3>
           <p className="muted" style={{ marginTop: 4 }}>
-            Subí un CSV con estas columnas: <code>CentroJudId</code>, <code>Centro Judicial</code>, <code>Unidad Judicial</code>,
-            <code>Expdte</code>, <code>Actor</code>, <code>Demandado</code>, <code>CodEstado</code> y <code>Estado atraves de expdte</code>.
-            La app busca por <code>Expdte</code> y sobrescribe los datos existentes del registro.
+            Subí un CSV con estas columnas: <code>Expdte</code>, <code>CodEstado</code> y <code>Estado atraves de expdte</code>.
+            La app busca por <code>Expdte</code> y actualiza solo el código y nombre del estado.
           </p>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={descargarPlantilla}>
             Descargar plantilla
@@ -180,19 +179,14 @@ export default function ActualizarExpedientesPage() {
             </p>
 
             <p className="muted" style={{ marginBottom: 12 }}>
-              Los campos que faltan en una fila se guardan como vacíos. La actualización se hace por <code>Expdte</code>.
+              Cada fila debe traer <code>Expdte</code>, <code>CodEstado</code> y <code>Estado atraves de expdte</code>.
             </p>
 
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>CentroJudId</th>
-                    <th>Centro Judicial</th>
-                    <th>Unidad Judicial</th>
                     <th>Expdte</th>
-                    <th>Actor</th>
-                    <th>Demandado</th>
                     <th>CodEstado</th>
                     <th>Estado atraves de expdte</th>
                   </tr>
@@ -200,12 +194,7 @@ export default function ActualizarExpedientesPage() {
                 <tbody>
                   {preview.rows.map((row, i) => (
                     <tr key={i}>
-                      <td>{row.CentroJudId ?? row.centroJudId ?? ""}</td>
-                      <td>{row["Centro Judicial"] ?? row.centroJudicial ?? ""}</td>
-                      <td>{row["Unidad Judicial"] ?? row.unidadJudicial ?? ""}</td>
                       <td>{row.Expdte ?? row.expdte ?? ""}</td>
-                      <td>{row.Actor ?? row.actor ?? ""}</td>
-                      <td>{row.Demandado ?? row.demandado ?? ""}</td>
                       <td>{row.CodEstado ?? row.codEstado ?? ""}</td>
                       <td>{row.Estado ?? row["Estado atraves de expdte"] ?? row.estado ?? ""}</td>
                     </tr>

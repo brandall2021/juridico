@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     await tx.begin();
 
     try {
-      const { updated } = await processBulkUpdateRows({
+      const rowResult = await processBulkUpdateRows({
         tx,
         records,
       });
@@ -42,9 +42,9 @@ export async function POST(req: NextRequest) {
           archivo: file.name,
           tamano: file.size,
           filasLeidas: records.length,
-          insertados: updated,
+          insertados: rowResult.updated,
           duplicados: 0,
-          errores: errors,
+          errores: [...errors, ...rowResult.errors],
           origen: "CSV-UPDATE",
         },
         session!.id
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
         ok: true,
         cargaId,
         totalLeidos: records.length,
-        actualizados: updated,
-        errores: errors,
+        actualizados: rowResult.updated,
+        errores: [...errors, ...rowResult.errors],
       });
     } catch (err) {
       await tx.rollback();

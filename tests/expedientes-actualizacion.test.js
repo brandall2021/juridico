@@ -121,3 +121,36 @@ test('processBulkUpdateRows rejects rows without status fields', async () => {
     /Expediente "EXP-001": falta CodEstado o Estado/
   );
 });
+
+test('processBulkUpdateRows continues after a missing expediente', async () => {
+  const { processBulkUpdateRows } = require('../lib/expedientes-actualizacion.js');
+
+  const queries = [];
+  const tx = {
+    request() {
+      return {
+        input() {
+          return this;
+        },
+        async query(sqlText) {
+          queries.push(sqlText);
+          if (queries.length === 1) return { rowsAffected: [0] };
+          return { rowsAffected: [1] };
+        },
+      };
+    },
+  };
+
+  const result = await processBulkUpdateRows({
+    tx,
+    records: [
+      { expdte: 'EXP-001', codEstado: 'ACT', estado: 'Activo' },
+      { expdte: 'EXP-002', codEstado: 'INA', estado: 'Inactivo' },
+    ],
+  });
+
+  assert.equal(result.updated, 1);
+  assert.equal(result.errors.length, 1);
+  assert.equal(result.errors[0], 'Expediente "EXP-001": no se encontró el expediente');
+  assert.equal(queries.length, 2);
+});

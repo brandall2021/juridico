@@ -5,6 +5,8 @@ export const { EXPEDIENTES_SOURCE, VISTA_FIELDS } = consultaSource as {
   VISTA_FIELDS: string[];
 };
 
+export const FECHA_PROCESADO_EXPR = "TRY_CONVERT(date, [Fecha Procesado], 103)";
+
 export function buildWhere(searchParams: URLSearchParams): {
   where: string;
   params: Record<string, string>;
@@ -40,6 +42,18 @@ export function buildWhere(searchParams: URLSearchParams): {
     params["q"] = q;
   }
 
+  const fechaDesde = searchParams.get("fechaProcesadoDesde")?.trim();
+  if (fechaDesde) {
+    where.push(`${FECHA_PROCESADO_EXPR} >= TRY_CONVERT(date, @p_fechaProcesadoDesde, 23)`);
+    params.p_fechaProcesadoDesde = fechaDesde;
+  }
+
+  const fechaHasta = searchParams.get("fechaProcesadoHasta")?.trim();
+  if (fechaHasta) {
+    where.push(`${FECHA_PROCESADO_EXPR} <= TRY_CONVERT(date, @p_fechaProcesadoHasta, 23)`);
+    params.p_fechaProcesadoHasta = fechaHasta;
+  }
+
   return { where: where.length ? "WHERE " + where.join(" AND ") : "", params };
 }
 
@@ -51,7 +65,7 @@ export const SORT_COLS: Record<string, string> = {
   actor: "[Actor]",
   demandado: "[Demandado]",
   fecha: "TRY_CONVERT(date, [Fecha], 103)",
-  fechaprocesado: "TRY_CONVERT(date, [Fecha Procesado], 103)",
+  fechaprocesado: FECHA_PROCESADO_EXPR,
   descripcion: "[Descripcion]",
   documento: "[Documento]",
   estado: "[Estado]",

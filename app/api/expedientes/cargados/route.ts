@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { FECHA_PROCESADO_EXPR } from "@/lib/consulta";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,18 @@ export async function GET(req: NextRequest) {
     if (q) {
       where.push(`([expdte] LIKE '%' + @q + '%' OR [actor] LIKE '%' + @q + '%' OR [demandado] LIKE '%' + @q + '%' OR [descripcion] LIKE '%' + @q + '%')`);
       params["q"] = q;
+    }
+
+    const fechaDesde = url.searchParams.get("fechaProcesadoDesde")?.trim();
+    if (fechaDesde) {
+      where.push(`${FECHA_PROCESADO_EXPR} >= TRY_CONVERT(date, @p_fechaProcesadoDesde, 23)`);
+      params.p_fechaProcesadoDesde = fechaDesde;
+    }
+
+    const fechaHasta = url.searchParams.get("fechaProcesadoHasta")?.trim();
+    if (fechaHasta) {
+      where.push(`${FECHA_PROCESADO_EXPR} <= TRY_CONVERT(date, @p_fechaProcesadoHasta, 23)`);
+      params.p_fechaProcesadoHasta = fechaHasta;
     }
 
     const page = Math.max(1, Number(url.searchParams.get("page") || 1));

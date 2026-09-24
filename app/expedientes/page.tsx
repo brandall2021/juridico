@@ -29,6 +29,11 @@ const SECONDARY_FILTERS = [
   { key: "descripcion", label: "Descripción" },
 ];
 
+const DATE_FILTERS = [
+  { key: "fechaProcesadoDesde", label: "Fecha procesado desde" },
+  { key: "fechaProcesadoHasta", label: "Fecha procesado hasta" },
+] as const;
+
 const SORTABLE = [
   { key: "expediente", label: "Expediente" },
   { key: "actor", label: "Actor" },
@@ -95,7 +100,7 @@ export default function ExpedientesPage() {
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const f: Record<string, string> = {};
-    for (const k of ["centro", "unidad", "expdte", "actor", "demandado", "descripcion", "estado"]) {
+    for (const k of ["centro", "unidad", "expdte", "actor", "demandado", "descripcion", "estado", "fechaProcesadoDesde", "fechaProcesadoHasta"]) {
       const v = sp.get(k);
       if (v) f[k] = v;
     }
@@ -318,7 +323,17 @@ export default function ExpedientesPage() {
                   />
                 </div>
               ))}
-                {estadoField}
+              {DATE_FILTERS.map((f) => (
+                <div className="field" key={f.key}>
+                  <label>{f.label}</label>
+                  <input
+                    type="date"
+                    value={filters[f.key] || ""}
+                    onChange={(e) => aplicarFiltro(f.key, e.target.value)}
+                  />
+                </div>
+              ))}
+              {estadoField}
               </div>
             </div>
         )}

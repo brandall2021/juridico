@@ -291,6 +291,29 @@ mensaje de Postgres al navegador.
 
 ---
 
+## Estado verificado (22/10/2026)
+
+Datos de la base real, medida sobre `rocketbot` en `186.153.163.188:15432`
+(PostgreSQL 18.6 en Dokploy):
+
+- 17 centros judiciales, **7.801 expedientes** (2.142 `ACT`, 5.659 `INA`) y
+  **114.742 movimientos** históricos importados de `LegajoExpdtes`.
+- El `UNIQUE (numero, jurisdiccion)` y el de huellas colapsaron 4 expedientes y
+  1.138 líneas duplicadas que el legado traía repetidas.
+- Corrida real contra el PJud con captcha de 2captcha: el expediente `762/22` pasó
+  de 220 a **224 movimientos** detectando los 4 nuevos y quedó en `SI`.
+- Corrida de 50 expedientes: `DONE`, 3 `SI` / 47 `NO` / 0 `KO`, 494 s
+  (≈9,8 s por expediente con `REQUEST_DELAY_S=3`), sin fallos de captcha.
+- **Pendiente**: quedan ~3.509 expedientes sin consultar (los que nunca tuvieron
+  `fch_ult_proc`); el worker los toma en tandas de `MAX_EXPEDIENTES_PER_RUN`.
+
+> **Rocketbot (el bot de escritorio) no es este repo.** Ese sigue funcionando con su
+> `ConsultaExpedientesDB.db`, su `config.ini` y el SQL Server `LegajoExpdtes`, como
+> respaldo permanente: no hay fase de retiro. Acá vive el sistema paralelo que ahora
+> también es el panel.
+
+---
+
 # Docker y Dokploy
 
 ## Una imagen, dos servicios
@@ -316,11 +339,13 @@ PJud y el gasto de captcha.
 
 ## Deploy
 
-1. **Base**: en Dokploy, crear/seleccionar la Postgres del bot y confirmar que la
-   `DATABASE_URL` del panel apunte a la misma. Al ser la base del bot, el padrón ya está.
-2. **Servicio `app`**: Application → esta repo, rama `unificar`, Dockerfile, comando
-   `server`. Variables: `DATABASE_URL`, `JWT_SECRET`, `MIGRAR_AL_INICIAR=1`, y
-   `SEED_AL_INICIAR=1` **sólo el primer arranque**.
+1. **Base**: la del bot ya está en Dokploy —`186.153.163.188:15432`, base
+   `rocketbot`, PostgreSQL 18.6— con el padrón importado. La `DATABASE_URL` del panel
+   y la del worker son la misma cadena, apuntando a la red interna del host:
+   `postgresql://<rol>:<pass>@<host>:15432/rocketbot?sslmode=require`.
+2. **Servicio `app`**: Application → este repo (`brandall2021/roketbot`), rama `main`,
+   Dockerfile, comando `server`. Variables: `DATABASE_URL`, `JWT_SECRET`,
+   `MIGRAR_AL_INICIAR=1`, y `SEED_AL_INICIAR=1` **sólo el primer arranque**.
 3. **Servicio `worker`**: misma imagen/repo, comando `worker`. Variables: `DATABASE_URL`,
    `CAPTCHA_PROVIDER=twocaptcha`, `TWOCAPTCHA_KEY`, `REQUEST_DELAY_S`, `MAX_EXPEDIENTES_PER_RUN`,
    `WORKER_INTERVALO_S`, y `SMTP_*` si querés el resumen por mail. **No necesita

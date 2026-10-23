@@ -14,6 +14,11 @@ Hoy es **Next.js + PostgreSQL**. El Python se portó a TypeScript (`lib/engine/`
 base de verdad es la que ya tenía el bot en Dokploy, con el padrón importado
 (17 centros, 7.801 expedientes, 114.742 movimientos).
 
+> **Este repo pasó a ser historia del port.** El proyecto unificado vive en
+> `brandall2021/roketbot`, rama `main`, y desde ahí se despliega. Esta rama
+> (`unificar`) queda como el lugar donde se hizo el trabajo; el README de roketbot
+> es el que hay que leer para el deploy.
+
 ---
 
 ## Stack

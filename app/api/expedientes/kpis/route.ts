@@ -1,14 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { consultarUno, fecha, num } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { EXPEDIENTES_SOURCE } from "@/lib/consulta";
+import { FUENTE } from "@/lib/consulta";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
 // In-memory cache for KPIs (60 seconds TTL)
-let kpiCache: { data: any; expiresAt: number } | null = null;
+let kpiCache: { data: Kpis; expiresAt: number } | null = null;
 const KPI_CACHE_TTL_MS = 60 * 1000;
 
+type Kpis = {
+  total: number;
+  actualizadosHoy: number;
+  conDocumento: number;
+  sinDocumento: number;
+  antiguos: number;
+  ultimaActualizacion: string | null;
+};
+
+/**
+ * Indicadores del panel. Antes cada métrica dependía de `TRY_CONVERT(date, ...)`
+ * sobre las columnas texto de la vista goolge2; acá son `date`/`timestamptz` reales:
+ *   - actualizados hoy  -> fch_ult_proc::date = CURRENT_DATE
+ *   - antiguos          -> fch_ult_mov < CURRENT_DATE - INTERVAL '365 days'
+ * Los contadores vienen de aggregate: Postgres los devuelve como string -> num().
+ */
 export async function GET(req: NextRequest) {
   const { response } = requireAuth(req);
   if (response) return response;
@@ -19,34 +36,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(kpiCache.data);
     }
 
-    const [kpis, ult] = await Promise.all([
-      query<any>(
+    const [k, ultima] = await Promise.all([
+      consultarUno<Record<string, unknown>>(
         `SELECT
-          COUNT(*) AS total,
-          SUM(CASE WHEN COALESCE(TRY_CONVERT(date, [Fecha Procesado], 103), TRY_CONVERT(date, [Fecha Procesado], 120)) = CONVERT(date, GETDATE()) THEN 1 ELSE 0 END) AS actualizadosHoy,
-          SUM(CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 1 ELSE 0 END) AS conDocumento,
-          SUM(CASE WHEN [Documento] IS NULL OR LTRIM(RTRIM([Documento])) = '' THEN 1 ELSE 0 END) AS sinDocumento,
-          SUM(CASE WHEN [Fecha] IS NOT NULL AND DATEDIFF(day, COALESCE(TRY_CONVERT(date, [Fecha], 103), TRY_CONVERT(date, [Fecha], 120)), GETDATE()) > 365 THEN 1 ELSE 0 END) AS antiguos
-        FROM ${EXPEDIENTES_SOURCE}`
+           COUNT(*) AS total,
+           COUNT(*) FILTER (WHERE fch_ult_proc::date = CURRENT_DATE) AS "actualizadosHoy",
+           COUNT(*) FILTER (WHERE documento IS NOT NULL AND TRIM(documento) <> '') AS "conDocumento",
+           COUNT(*) FILTER (WHERE documento IS NULL OR TRIM(documento) = '') AS "sinDocumento",
+           COUNT(*) FILTER (WHERE fch_ult_mov IS NOT NULL
+                              AND fch_ult_mov < CURRENT_DATE - INTERVAL '365 days') AS antiguos
+         FROM ${FUENTE}`
       ),
-      query<{ ultima: string | null }>(
-        `SELECT MAX([Fecha Procesado]) AS ultima FROM ${EXPEDIENTES_SOURCE}`
-      ),
+      consultarUno<{ ultima: unknown }>(`SELECT MAX(fch_ult_proc) AS ultima FROM ${FUENTE}`),
     ]);
 
-    const k = kpis[0] ?? {};
-    const data = {
-      total: Number(k.total || 0),
-      actualizadosHoy: Number(k.actualizadosHoy || 0),
-      conDocumento: Number(k.conDocumento || 0),
-      sinDocumento: Number(k.sinDocumento || 0),
-      antiguos: Number(k.antiguos || 0),
-      ultimaActualizacion: ult[0]?.ultima ?? null,
+    const data: Kpis = {
+      total: num(k?.total ?? 0),
+      actualizadosHoy: num(k?.actualizadosHoy ?? 0),
+      conDocumento: num(k?.conDocumento ?? 0),
+      sinDocumento: num(k?.sinDocumento ?? 0),
+      antiguos: num(k?.antiguos ?? 0),
+      ultimaActualizacion: ultima?.ultima ? fecha(ultima.ultima) : null,
     };
 
     kpiCache = { data, expiresAt: now + KPI_CACHE_TTL_MS };
     return NextResponse.json(data);
-  } catch {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+  } catch (err) {
+    return respuestaDeError("expedientes/kpis", err);
   }
 }

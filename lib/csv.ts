@@ -163,3 +163,85 @@ export async function parseCsv(
 
   return { records, errors, columns };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Actualización masiva de estado procesal                                     */
+/* (antes lib/expedientes-actualizacion.js, puro CSV sin tocar la base)        */
+/* -------------------------------------------------------------------------- */
+
+export type ActualizarRegistro = {
+  expdte: string | null;
+  codEstado: string | null;
+  estado: string | null;
+};
+
+export type PreviewActualizar = {
+  columns: string[];
+  rows: Record<string, string>[];
+  total: number;
+  errors: string[];
+  records: ActualizarRegistro[];
+};
+
+/**
+ * Cabeceras que traen los archivos del Poder Judicial para el mismo campo. Están
+ * en el orden de preferencia del legado: `CodEstado` se resuelve con el valor de
+ * `Estado` si aquel falta, y `Estado` acepta el encabezado largo.
+ */
+const ACTUALIZAR_ALIAS: Record<keyof ActualizarRegistro, string[]> = {
+  expdte: ["expdte", "expediente"],
+  codEstado: ["codestado", "estado", "estado atraves de expdte"],
+  estado: ["estado", "estado atraves de expdte"],
+};
+
+function normalizarClave(columna: string): string {
+  return columna.trim().toLowerCase();
+}
+
+/**
+ * Parsea el CSV de actualización y devuelve el preview (`columns`/`rows`/`total`)
+ * más los `records` listos para `actualizarEnMasa`. Es lógica pura de CSV: no toca
+ * la base, así que se puede probar sin PostgreSQL.
+ */
+export async function parseCsvActualizar(buffer: Buffer): Promise<PreviewActualizar> {
+  const { columns, rows } = await parseRows(buffer);
+
+  // Header del archivo -> nombre canónico en minúscula, la primera aparición gana.
+  const porAlias = new Map<string, string>();
+  for (const columna of columns) {
+    const clave = normalizarClave(columna);
+    if (!porAlias.has(clave)) porAlias.set(clave, columna);
+  }
+
+  const leer = (row: Record<string, string>, alias: string): string | null => {
+    const columna = porAlias.get(alias);
+    if (!columna) return null;
+    const valor = row[columna];
+    if (valor === undefined || valor === null) return null;
+    const limpio = String(valor).trim();
+    return limpio === "" ? null : limpio;
+  };
+
+  const primera = (row: Record<string, string>, campo: keyof ActualizarRegistro): string | null => {
+    for (const alias of ACTUALIZAR_ALIAS[campo]) {
+      const valor = leer(row, alias);
+      if (valor) return valor;
+    }
+    return null;
+  };
+
+  const records: ActualizarRegistro[] = rows.map((row) => ({
+    expdte: primera(row, "expdte"),
+    codEstado: primera(row, "codEstado"),
+    estado: primera(row, "estado"),
+  }));
+
+  const errors: string[] = [];
+  records.forEach((r, i) => {
+    if (!r.expdte) errors.push(`Fila ${i + 1}: falta Expdte`);
+    if (!r.codEstado) errors.push(`Fila ${i + 1}: falta CodEstado`);
+    if (!r.estado) errors.push(`Fila ${i + 1}: falta Estado`);
+  });
+
+  return { columns, rows: rows.slice(0, 5), total: rows.length, errors, records };
+}

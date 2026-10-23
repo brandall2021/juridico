@@ -1,307 +1,397 @@
-# Expedientes Jurídicos
+# Expedientes del Poder Judicial de Tucumán
 
-Sistema para consultar la vista `[LegajoExpdtes].[dbo].[goolge2]` (SQL Server) de expedientes judiciales y cargar registros nuevos, ya sea de forma manual o por importación de archivos CSV.
+Un solo proyecto donde antes había dos:
 
-## Características
+- **juridico** (Next.js): el panel web — login con usuarios y roles, importación de
+  CSV, grilla de expedientes con filtros, KPIs, gráficos, export a CSV y PDF, y los
+  maestros de centros, provincias y carátula.
+- **roketbot** (Python + FastAPI): el motor que consulta el padrón al Poder Judicial
+  (PJud), resuelve el captcha, guarda los movimientos nuevos y deja registro de cada
+  corrida.
 
-- **Consulta** de la vista `[LegajoExpdtes].[dbo].[goolge2]` con filtros (centro judicial, unidad judicial, expediente, actor, demandado, estado y búsqueda general) y paginación.
-- **Detalle** de expediente con la historia completa (campo XML `Historia`).
-- **Alta manual** de registros nuevos.
-- **Importación CSV con mapeo de columnas**: asistente en 3 pasos — subir archivo (arrastrar y soltar), mapear cada columna del CSV a los campos del sistema (con auto-sugerencia y valor de ejemplo), y confirmar con una vista previa de los primeros registros ya mapeados antes de importar. Incluye plantilla descargable.
-- **Login simple** con usuarios propios (JWT en cookie httpOnly).
-- **Administración de usuarios y roles**: crear, editar, cambiar contraseña y eliminar usuarios (solo ADMIN).
-- **Carga a la base real**: los registros nuevos se insertan en la tabla `dbo.ExpdtesCaratula` (la misma que alimenta la vista `[LegajoExpdtes].[dbo].[goolge2]`), por lo que aparecen inmediatamente en el listado. La carga queda auditada en `dbo.app_expedientes` (quién, cuándo y origen).
-- **Maestros**: alta de Centros Judiciales (`CentrosJudiciales`) y Provincias (`Provincias`) directamente desde la app (edición/eliminación solo ADMIN).
-- **Dashboard (centro de control)**: tarjetas KPI (total de expedientes, actualizados hoy, con/sin documento, estado activo/inactivo) y panel de alertas jurídicas con acceso directo a listados filtrados.
-- **Bandeja de expedientes**: estado textual, columna Documento como enlace "Ver documento" (la URL queda oculta), detalle en panel lateral (drawer) y búsqueda global por expediente, actor, demandado o documento. En mobile la tabla se convierte en tarjetas.
-- **Carátula**: listado de `dbo.ExpdtesCaratula` con edición y eliminación de registros desde la app.
-- **Ordenamiento**: todas las columnas del listado son ordenables (ascendente/descendente) haciendo clic en el encabezado.
-- **Exportación**: descarga del listado filtrado a **CSV** (hasta 10.000 filas) o **PDF** (hasta 800 filas) con logo de recuperocrediticio.com y encabezado institucional.
-- **Navegación**: sidebar en desktop con menú hamburguesa en mobile, y franja de estado ("Sistema activo · total · última actualización · usuario").
+Hoy es **Next.js + PostgreSQL**. El Python se portó a TypeScript (`lib/engine/` y
+`worker/`), el `dashboard.html` de FastAPI se borró y el SQL Server quedó afuera: la
+base de verdad es la que ya tenía el bot en Dokploy, con el padrón importado
+(17 centros, 7.801 expedientes, 114.742 movimientos).
+
+---
 
 ## Stack
 
-- Next.js 14 (App Router, API routes)
-- TypeScript
-- Driver `mssql` v11 (tedious, JS puro — funciona en contenedores Alpine sin dependencias nativas)
-- `jsonwebtoken` + `bcryptjs` para autenticación
-- `csv-parse` para importación de CSV
+Next.js 14 · React 18 · TypeScript 5 · PostgreSQL 16 (`pg`) · bcryptjs + JWT en cookie ·
+nodemailer · pdfkit · recharts · vitest · Docker.
+
+No hay ORM: las queries van en SQL directo sobre un pool de `pg` (`lib/db.ts`), y el
+esquema se administra con `migrations/*.sql`.
+
+---
+
+## Arquitectura
+
+```
+app/                     Capa HTTP de Next (páginas + rutas de API)
+  api/**                 24 rutas, todas sobre PostgreSQL
+  corridas/**            seguimiento de corridas (rol ADMIN, sólo lectura)
+  expedientes/[id]       ficha de un expediente con sus movimientos
+worker/                  Procesos de Node, sin Next
+  corrida.ts             un ciclo: abrir corrida -> consultar -> cerrar corrida
+  cli.ts                 run | worker | retry-ko | stats
+lib/
+  engine/                Motor portado del bot (sin dependencias de Next)
+    pjud.ts              cliente del PJud: formatos de fecha, huellas, filtrado
+    captcha.ts           2captcha + TokenManager (TTL y renovación)
+    ingest.ts            lecturas/alta: pendientes, movimientos, resultado
+  db.ts                  pool de `pg`, consultar/consultarUno/ejecutar, transacciones
+  config.ts              lectura de variables de entorno, normalización de DATABASE_URL
+  corridas.ts            lecturas compartidas por las páginas (el worker también usa)
+  mailer.ts              resumen por mail + registro en `notificaciones`
+  auth.ts / sesion.ts    JWT, roles, guard de página
+  consulta.ts / expedientes.ts / csv.ts / rutas.ts   listados, alta, CSV, helpers HTTP
+components/              UI (AppShell, CorridasUI, gráficos)
+migrations/              esquema en SQL, idempotente
+tests/                   vitest (Node, sin base real)
+```
+
+El orden de dependencias es estricto: **el worker importa de `lib/` y nunca al revés**;
+las páginas de Next no importan `worker/*` (si lo hicieran, `nodemailer` entraría en el
+bundle del navegador). Por eso el worker se compila aparte con `tsconfig.node.json`
+(CommonJS, `dist/node`) y no usa el alias `@/`.
+
+---
+
+## Modelo de fechas (importante)
+
+Una fecha de calendario — el día de un movimiento — **nunca** es un `Date` en este
+proyecto: es la cadena `YYYY-MM-DD` (`type Dia` en `lib/engine/pjud.ts`). Los tres puntos
+por donde entra la zona horaria, y cómo se cerró cada uno:
+
+- **Lectura.** `lib/db.ts` reemplaza el parser de `pg` para el OID `1082` (`date`): la
+  columna llega como texto, no como `Date` a medianoche local. Mezclar eso con una fecha
+  parseada del PJud (medianoche UTC) producía un desfase de un día según la `TZ`.
+- **Escritura.** `parseFecha` del CSV devuelve la cadena ya normalizada. Un `Date` a
+  medianoche UTC se serializa con los componentes **locales** de `pg`: con
+  `TZ=America/Argentina/Buenos_Aires` el día se guardaba uno antes.
+- **Comparación y huella.** Con cadenas, el ordering lexicográfico es el ordering del
+  calendario y `hash_unico` no cambia aunque cambie la zona del contenedor.
+
+La validación de calendario es obligatoria en las dos rutas de parseo (`31/02/2024` y
+`13/13/13` dan `null`, no la fecha rolada que `Date.UTC` inventa): una línea con fecha
+basura que llega al `INSERT` tumbaría el expediente entero y lo marcaría KO.
+
+`timestamptz` sigue siendo instante (`Date`); para que el panel muestre la misma hora que
+guardó Postgres, el Dockerfile fija `TZ=UTC`.
+
+---
+
+## Esquema
+
+Una sola base. Lo que había antes:
+
+| Legado | Ahora |
+|---|---|
+| `LegajoExpdtes.dbo.ExpdtesCaratula` (SQL Server) | `expedientes` |
+| `LegajoExpdtes.dbo.ExpdtesLineas` (XML `Historia`) | `movimientos` (una fila por movimiento, deduplicada por huella) |
+| `LegajoExpdtes.dbo.CentrosJudiciales` | `centros_judiciales` |
+| `LegajoExpdtes.dbo.Provincias` | `provincias` |
+| `dbo.app_usuarios` | `usuarios` |
+| `dbo.app_cargas` | `cargas` |
+| `dbo.app_expedientes` | **desaparece**: era una copia de auditoría del alta. El registro es la fila de `expedientes`, con `origen_carga` y `creado_por` |
+
+Tablas del bot que se conservan tal cual: `corridas`, `corrida_items`,
+`tokens_captcha`, `notificaciones`. La vista `vista_expedientes` deja el expediente plano
+(centro, unidad, provincia, `total_movimientos`) para que el panel no repita el join en
+cada filtro, KPI y gráfico.
+
+Dos columnas de estado que se confunden fácil:
+
+- `expedientes.estado` → estado procesal (`ACT` / `INA`). **Por esto el worker elige a consultar.**
+- `expedientes.actualizado` → resultado de la última consulta al PJud (`SI` / `NO` / `KO`).
+
+`migrations/` corre en orden y una sola vez, con registro en `schema_migrations`:
+
+- `0001_unificar_esquema.sql` — tablas, columnas nuevas, trigger de `updated_at`, vista.
+- `0002_datos_derivados.sql` — provincia, `estado_nombre` y `documento` derivados de lo que ya estaba importado.
+
+Ambos archivos son idempotentes (`IF NOT EXISTS` / `OR REPLACE` / `WHERE ... IS NULL`),
+así que corren igual sobre la base del bot con datos y sobre una vacía, y se pueden
+reejecutar sin pisar lo que cargó un usuario.
+
+Borradores (así están las claves foráneas): mover un centro no huérfana expedientes
+(`centro_id` es `ON DELETE SET NULL`), borrar un expediente se lleva sus movimientos
+(`CASCADE`) y deja `corrida_items` con `expediente_id` en NULL: el historial de esa corrida
+queda, aunque la ficha ya no exista.
+
+---
+
+## Flujo de una corrida
+
+```
+corridas (RUNNING)
+  └─ por expediente pendiente (estado='ACT', fch_ult_proc ASC NULLS FIRST, id ASC, LIMIT n)
+       ├─ TokenManager.get()        -> token de reCAPTCHA (se reutiliza, TTL 90 s)
+       ├─ PjudClient.historial()    -> stories en bruto
+       ├─ filtrarNuevas()           -> sólo los movimientos más recientes que fch_ult_mov
+       ├─ INSERT movimientos         ON CONFLICT (expediente_id, hash_unico) DO NOTHING
+       ├─ UPDATE expedientes        fch_ult_mov / ult_mov_desc
+       └─ corrida_items             SI | NO | KO
+cerrarCorrida(DONE | FAILED, cnt_si, cnt_no, cnt_ko)  ->  mail de resumen (opcional)
+```
+
+Reglas del bot que se conservaron **por su comportamiento probado**, no por nostalgia:
+
+- **TTL del token 90 s.** El reCAPTCHA dura ~2 minutos y es reutilizable: se resuelve una
+  vez y se usa para muchos expedientes. Sin esto, la corrida gastaba un captcha por
+  expediente.
+- **`REQUEST_DELAY_S=3` entre requests.** Es un acuerdo implícito con el servidor del
+  PJud. Bajarlo no consulta más rápido: arriesga que corten el acceso.
+- **`MAX_EXPEDIENTES_PER_RUN=500`.** Techo por corrida: acota cuántos créditos de captcha
+  se pueden gastar en un ciclo y deja `corridas` con un registro acotado, en vez de una
+  corrida que corre horas sin cerrar.
+- **Dedupe por huella.** `hash_unico = sha256(fecha + "|" + descripcion.trim().lower())`,
+  con `UNIQUE(expediente_id, hash_unico)`. La fórmula es idéntica a la de Python, así que
+  los 114.742 movimientos ya importados no se duplican. El `INSERT` multi-fila usa
+  `ON CONFLICT DO NOTHING RETURNING id`: `SI` recién si hubo insert reales.
+- **Ante `CaptchaInvalido`, se renueva el token y se reintenta ese expediente una vez.**
+  Si vuelve a fallar se **aborta la corrida** (`FAILED`): seguir marcaría todo KO sin
+  haber consultado nada, y esos KO no son recuperables como datos.
+- **`parseFechaPjud` valida calendario.** Rechaza `31/02`, `29/02` de año no bisiesto y
+  basura tipo `13/13/13`. Un `INSERT` con fecha inválida tiraba y el expediente entero
+  pasaba a KO por una línea basura.
+
+El panel de **Corridas es deliberadamente de sólo lectura**: no hay botón "Ejecutar".
+Una corrida real tarda minutos, gasta créditos de captcha y tiene que quedar registrada
+aun si el usuario cierra la pestaña; por eso la dispara el servicio `worker` o la CLI, no
+el navegador.
+
+---
 
 ## Requisitos
 
-- SQL Server accesible por TCP (por defecto puerto **1433**) con la vista `[LegajoExpdtes].[dbo].[goolge2]`.
-- La base de datos por defecto se llama `LegajoExpdtes`.
-
-> ⚠️ **Importante:** el servidor SQL debe tener el protocolo **TCP/IP habilitado** y el puerto 1433 abierto (SQL Server Configuration Manager → Protocols → TCP/IP → Enabled, y el puerto en `IPALL`). Sin eso la app no puede conectarse.
+Node 20+, npm 10+ y acceso a un PostgreSQL. No hace falta Docker para desarrollar.
 
 ## Desarrollo local
 
 ### 1. Variables de entorno
 
-```bash
-cp .env.example .env
-```
+Copiar `.env.example` a `.env` y completar. Está todo explicado ahí; lo obligatorio:
 
-| Variable | Descripción | Default |
-|---|---|---|
-| `MSSQL_HOST` | IP o hostname del SQL Server | `192.168.35.222` |
-| `MSSQL_PORT` | Puerto TCP de SQL Server | `1433` |
-| `MSSQL_USER` | Usuario SQL | `sa` |
-| `MSSQL_PASSWORD` | Contraseña SQL | — |
-| `MSSQL_DATABASE` | Base de datos | `LegajoExpdtes` |
-| `JWT_SECRET` | Secreto para firmar tokens (cambiarlo en producción) | — |
-| `JWT_EXPIRES` | Vigencia del token | `7d` |
-| `APP_URL` | URL pública de la app | `http://localhost:3000` |
+| Variable | Descripción |
+|---|---|
+| `DATABASE_URL` | Cadena PostgreSQL. Se acepta el formato viejo del bot (`postgresql+psycopg://`); `lib/config.ts` la normaliza. Con la base fuera del host, `?sslmode=require` |
+| `JWT_SECRET` | Obligatorio. Rotarla invalida todas las sesiones |
+| `ADMIN_PASSWORD` | Para el seed; en producción se rechazan las conocidas (mínimo 10 caracteres) |
+
+`CAPTCHA_PROVIDER=none` deja el motor sin resolver captcha: se puede probar todo el panel
+y el worker con `--token` sin gastar créditos.
 
 ### 2. Instalar y correr
 
 ```bash
+export NODE_OPTIONS=--use-system-ca   # si npm necesita el certificado de la CA del sistema
 npm install
-npm run dev
+npm run migrate                       # aplica migrations/*.sql
+npm run seed                          # crea el administrador (idempotente)
+npm run dev                           # http://localhost:3000
 ```
 
-Abrir `http://localhost:3000`.
+### 3. Scripts
 
-### 3. Preparar la base (primer uso)
+| Comando | Hace |
+|---|---|
+| `npm run dev` / `build` / `start` / `lint` | Next de siempre |
+| `npm run typecheck` | `tsc --noEmit` sobre la app |
+| `npm test` | `vitest run` — 122 tests, sin base real (`vi.mock`) |
+| `npm run migrate` | aplica las migraciones pendientes |
+| `npm run migrate -- status` / `-- --dry` | estado sin tocar nada / qué aplicaría |
+| `npm run seed` | alta del administrador inicial |
+| `npm run build:worker` | `tsc -p tsconfig.node.json` → `dist/node` |
+| `npm run corrida -- --limit 50` | una corrida y corta |
+| `npm run worker` | residente, cada `WORKER_INTERVALO_S` |
 
-La app necesita tres tablas propias (`dbo.app_usuarios`, `dbo.app_expedientes` y `dbo.app_cargas`) y un usuario admin.
+### 4. Worker y CLI
 
-Opción A — vía Node (requiere tener `node_modules`):
+El worker no necesita Next: se lo puede correr directo con `tsx` o desde la imagen
+compilada.
 
 ```bash
-MSSQL_PASSWORD=... node scripts/seed.js
+npx tsx worker/cli.ts run --limit 50 --notify    # una corrida
+npx tsx worker/cli.ts worker --interval 3600      # residente
+npx tsx worker/cli.ts retry-ko --corrida 12       # reintenta los KO de una corrida
+npx tsx worker/cli.ts stats                        # resumen de la base
 ```
 
-Opción B — vía `sqlcmd` en la máquina del SQL Server, ejecutando `scripts/migrate.sql`, y luego insertar el usuario admin manualmente.
+El token se puede pasar con `--token` o por `CAPTCHA_TOKEN`; **no** lo escribas en un
+script commiteado ni lo subas a un issue.
 
-El seed crea el usuario por defecto `admin / admin123` y, si no existen, los usuarios de ejemplo `operador / operador123` y `consultor / consultor123` (rol `USER`). Se puede configurar con `ADMIN_USERNAME`, `ADMIN_PASSWORD` y `ADMIN_NOMBRE`, y desactivar los de ejemplo con `CREATE_EXAMPLE_USERS=false`:
+### 5. Usuarios y roles
 
-```bash
-MSSQL_PASSWORD=... ADMIN_PASSWORD=clave-fuerte node scripts/seed.js
-```
-
-> Cambiar la contraseña del admin apenas se cree el sistema.
-
-## Usuarios y roles
-
-| Rol | Acceso |
-|---|---|
-| `ADMIN` | Todo: consulta, alta manual, importación CSV, administración de usuarios (crear/editar/eliminar, cambiar rol y contraseña) y edición/eliminación de centros judiciales y provincias |
-| `USER` | Consulta, alta manual, importación CSV y alta de centros judiciales y provincias (sin administrar usuarios ni editar/eliminar maestros) |
-
-La gestión se hace desde **Usuarios** (menú superior, solo visible para `ADMIN`): crear usuario, editar nombre/rol, resetear contraseña y eliminar.
-
-Reglas de seguridad:
-- Un admin no puede quitarse el rol ADMIN a sí mismo.
-- No se puede eliminar el propio usuario ni el último administrador.
-- Las contraseñas se almacenan con bcrypt (hash de 10 rondas).
-
-## CSV de importación
-
-Al entrar a `/expedientes/importar` el asistente guía el proceso en 3 pasos:
-
-1. **Subir el archivo** (arrastrar y soltar o clic) — se analiza y se muestran las columnas detectadas y el total de registros.
-2. **Mapear columnas** — para cada campo importable se elige qué columna del CSV le corresponde (con auto-sugerencia por nombre y el valor de la primera fila como ejemplo). Los campos sin columna se pueden dejar en "No importar".
-3. **Confirmar** — se muestra una vista previa con los primeros registros del archivo ya mapeados a los campos del sistema; recién ahí se presiona "Confirmar e importar".
-
-Solo se importan **Centro Judicial** (por nombre y unidad, o directamente por `ExpdteCenJudId`), **Unidad Judicial**, **Expdte**, **Actor**, **Demandado** y los estados **`ExpdteEstado`** (ej. `ACT`) y **`ExpdteEstadoNombre`** (ej. `ACTIVO`); los demás campos del archivo se ignoran (la `Carátula` se genera automáticamente). Si el archivo trae una columna `Estado` (SI/NO/KO) se guarda como "actualizado".
-
-Columnas del archivo (pueden estar en español o inglés, sin distinción de mayúsculas, y los encabezados no necesitan coincidir con los de la plantilla porque el mapeo es manual):
-
-```
-Centro Judicial,Unidad Judicial,Expdte,Actor,Demandado,ExpdteCenJudId,ExpdteEstado,ExpdteEstadoNombre
-```
-
-- Solo `Expdte` es obligatoria y debe mapearse a alguna columna.
-- **No se insertan duplicados**: antes de importar se verifica en `dbo.ExpdtesCaratula` si ya existe un expediente con ese número (mismo comportamiento en la carga manual); los que ya existen se saltan y se cuentan como "duplicados".
-- `Caratula` vacía se genera automáticamente como `Actor C/ Demandado`.
-- El centro judicial se resuelve por nombre+unidad, o por `ExpdteCenJudId` si se provee (tiene prioridad sobre el nombre).
-- Los campos `Documento`, `Fecha`, `Descripcion`, `Fecha Procesado`, `Caratula` e `Historia` del archivo no se importan. `Estado` (SI/NO/KO) se guarda en `ExpdteActualizado`.
-- El archivo se puede obtener desde la propia app (botón "Descargar plantilla" en `/expedientes/importar`).
-- Se aceptan tanto `;` como `,` como separador de columnas, y archivos con BOM (UTF-8 con firma, como exporta Excel).
-- Cada importación se registra en `dbo.app_cargas` (nombre y tamaño del archivo, usuario, fecha, filas leídas, insertados, duplicados y errores). El listado se ve en **Archivos subidos** (`/expedientes/archivos`).
-
-## Carga de registros (mapeo)
-
-La vista `[LegajoExpdtes].[dbo].[goolge2]` es solo lectura y combina `ExpdtesCaratula` con `CentrosJudiciales` y `ExpdtesLineas`. Al cargar un registro, la app hace el mapeo a la tabla real:
-
-| Campo del formulario/CSV | Columna en `dbo.ExpdtesCaratula` |
-|---|---|
-| Centro Judicial | `ExpdteCenJudId` (resuelto contra `CentrosJudiciales` por nombre y unidad) |
-| Unidad Judicial | `ExpdteUnidadJud` |
-| Expdte | `ExpdteNro` |
-| Actor / Demandado | `ExpdteActor` / `ExpdteDemandado` |
-| Fecha | `ExpdteFchUltMov` (date) |
-| Descripción | `ExpdteUltMovDescripcion` |
-| Fecha Procesado | `ExpdteFchUltProc` (date) |
-| Estado | `ExpdteActualizado` |
-| Historia | `ExpdteLegajo` (XML) |
-| Carátula | `ExpdteCaratula` (auto si vacía) |
-| — | `ExpdteId` = MAX+1 automático |
-| — | `ExpdteProvinciaNombre` = resuelta desde `Provincias` |
-
-Además se escribe un registro de auditoría en `dbo.app_expedientes` (usuario, origen MANUAL/CSV y fecha).
-
-## Estructura
-
-```
-app/
-  login/                    → pantalla de acceso
-  expedientes/              → listado + filtros + detalle
-  caratula/                 → tabla ExpdtesCaratula (read/update/delete)
-  expedientes/importar/     → importación CSV
-  expedientes/archivos/     → archivos CSV subidos (auditoría de cargas)
-  centros/                  → maestros: centros judiciales
-  provincias/               → maestros: provincias
-  api/auth/                 → login, logout, me
-  api/expedientes/          → listado vista (GET), alta manual (POST /nuevo)
-  api/expedientes/import/   → importación CSV (POST) y análisis de archivo (preview)
-  api/expedientes/cargas/   → registro de archivos subidos (app_cargas)
-  api/expedientes/cargados/ → auditoría de cargas (app_expedientes)
-  api/expedientes/kpis/     → indicadores del dashboard (totales, estados, documento)
-  api/expedientes/charts/   → datos para gráficos (estados, documentos, por mes)
-  api/expedientes/export/   → exportación CSV/PDF del listado filtrado
-  api/usuarios/             → gestión de usuarios y roles (ADMIN)
-  api/centros/              → CRUD de CentrosJudiciales
-  api/provincias/           → CRUD de Provincias
-lib/
-  db.ts                     → pool MSSQL
-  auth.ts                   → JWT / contraseñas / sesión
-  expedientes.ts            → mapeo e inserción en ExpdtesCaratula (transacción)
-  csv.ts                    → parser de CSV
-  client.ts                 → helpers de fetch del cliente
-components/
-  AppShell.tsx              → sidebar + franja de estado
-  AuthGuard.tsx             → sesión obligatoria
-  KpiCards.tsx              → tarjetas de indicadores
-  EstadoBadge.tsx           → badge SI / NO / KO
-  DocumentoCell.tsx         → enlace "Ver documento" / "Sin documento"
-scripts/
-  migrate.sql               → esquema app_usuarios + app_expedientes + app_cargas
-  seed.js                   → aplica esquema y crea usuario admin
-```
-
-## API
-
-Todas las rutas requieren sesión (cookie `juridico_token`).
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| POST | `/api/auth/login` | Iniciar sesión `{username, password}` |
-| POST | `/api/auth/logout` | Cerrar sesión |
-| GET | `/api/auth/me` | Usuario actual |
-| GET | `/api/expedientes` | Listado de la vista. Filtros: `centro, unidad, expdte, actor, demandado, descripcion, documento, estado, q, page, pageSize` (+`historia=1` para incluir el XML). `q` busca en expediente, actor, demandado, descripción y documento |
-| GET | `/api/expedientes/kpis` | Indicadores del dashboard (totales, actualizados hoy, con/sin documento, antiguos, última actualización) |
-| GET | `/api/expedientes/[expdte]` | Detalle de un expediente (`?centro=&unidad=` para desambiguar) |
-| POST | `/api/expedientes/nuevo` | Alta manual (inserta en `dbo.ExpdtesCaratula` + auditoría) |
-| GET | `/api/expedientes/cargados` | Auditoría de cargas (`app_expedientes`, mismos filtros + `origen`) |
-| POST | `/api/expedientes/import` | Importación CSV (inserta en `dbo.ExpdtesCaratula` + registra la carga en `app_cargas`). Opcional: campo `mapping` (JSON `{campo: columna}`) |
-| POST | `/api/expedientes/import/preview` | Analiza un CSV y devuelve columnas, total y primeras filas (solo lectura) |
-| GET | `/api/expedientes/cargas` | Archivos subidos (`app_cargas`). Filtros: `q, desde, hasta, page, pageSize` |
-| GET | `/api/caratula` | Listado paginado de `dbo.ExpdtesCaratula` |
-| GET | `/api/caratula/[id]` | Detalle de un registro de `dbo.ExpdtesCaratula` |
-| PUT | `/api/caratula/[id]` | Actualizar un registro de `dbo.ExpdtesCaratula` (**ADMIN**) |
-| DELETE | `/api/caratula/[id]` | Eliminar un registro de `dbo.ExpdtesCaratula` (**ADMIN**) |
-| GET | `/api/usuarios` | Listar usuarios (**ADMIN**) |
-| POST | `/api/usuarios` | Crear usuario (**ADMIN**) |
-| PUT | `/api/usuarios/[id]` | Editar nombre/rol/contraseña (**ADMIN**) |
-| DELETE | `/api/usuarios/[id]` | Eliminar usuario (**ADMIN**) |
-| GET | `/api/centros` | Listar centros judiciales (con provincia) |
-| POST | `/api/centros` | Crear centro judicial (`CentroJudId` = MAX+1) |
-| PUT | `/api/centros/[id]` | Editar centro (**ADMIN**) |
-| DELETE | `/api/centros/[id]` | Eliminar centro (**ADMIN**) |
-| GET | `/api/provincias` | Listar provincias |
-| POST | `/api/provincias` | Crear provincia (`ProvinciaId` = MAX+1) |
-| PUT | `/api/provincias/[id]` | Editar provincia (**ADMIN**) |
-| DELETE | `/api/provincias/[id]` | Eliminar provincia (**ADMIN**) |
+`ADMIN` ve todo, incluidos `/corridas` y `/usuarios`; `USER` trabaja con expedientes. La
+barrera real está en cada ruta (`requireAuth`/`requireAdmin`) y en `sesionAdmin()` /
+`sesionRequerida()` de las páginas: el menú es cosmético, y `middleware.ts` sólo hace la
+primera criba (existe la cookie). Públicas: `/login`, `/api/auth/login`,
+`/api/auth/logout` y `/api/health` — esta última porque el healthcheck de Dokploy no tiene
+sesión, y no devuelve más que `{ok, base}`.
 
 ---
 
-# Deploy en Dokploy
+## CSV de importación
 
-> **Estado:** pendiente. El SQL Server está en la LAN (`192.168.35.222`) y los Dokploy disponibles no la alcanzan, por lo que todavía no se desplegó. Estas instrucciones quedan listas para cuando haya un Dokploy en la red (o un túnel/VPN hacia el SQL). Mientras tanto la app corre local (`npm run dev`) o como contenedor en la red.
-
-## Requisitos
-
-- Repositorio GitHub: `https://github.com/brandall2021/juridico` (rama `master`).
-- Un servidor con Dokploy con acceso de red al SQL Server (`192.168.35.222:1433`). Como el SQL está en la LAN, el servidor Dokploy debe estar en esa misma red (o llegar por VPN/firewall), y Docker debe poder resolver el host.
-
-## Paso 1 — Crear la aplicación
-
-En Dokploy: **Projects → Nuevo proyecto → Nuevo servicio → Aplicación → Git**.
-
-- **Provider:** GitHub
-- **Repositorio:** `brandall2021/juridico`
-- **Branch:** `master`
-
-## Paso 2 — Configuración del build
-
-- **Type:** Dockerfile
-- **Docker Context:** `.`
-- El `Dockerfile` es multi-stage (instala deps → `next build` → imagen `standalone` de Node). No requiere más configuración de build.
-
-## Paso 3 — Variables de entorno
-
-Agregar en Dokploy (sección **Advanced → Environment**):
+`/expedientes/importar` (maestro de expedientes) y `/expedientes/actualizar` (sólo campos
+de estado) aceptan `,` o `;` como separador, BOM, y si el UTF-8 no cierra leen latin1
+(los acentos y la ñ de un Excel argentino). Las cabeceras se reconocen por sinónimos del
+legado, en `HEADER_ALIASES` de `lib/csv.ts`:
 
 ```
-MSSQL_HOST=192.168.35.222
-MSSQL_PORT=1433
-MSSQL_USER=sa
-MSSQL_PASSWORD=***
-MSSQL_DATABASE=LegajoExpdtes
-JWT_SECRET=<secreto-aleatorio-fuerte>
-JWT_EXPIRES=7d
-APP_URL=https://<tu-dominio>
+Centro Judicial;Unidad Judicial;Expdte;Carátula;Actor;Demandado;Estado;Fecha;Descripcion;Documento;Fecha Procesado;Estado Actualizado
 ```
 
-> `JWT_SECRET` debe ser único y no compartido. Generar con `openssl rand -base64 32`.
+Cuidado con `Estado`, que es la trampa del legado: **`Estado` = estado procesal**
+(`ACT`/`INA`), mientras que el resultado de la consulta (`SI`/`NO`/`KO`) entra por
+`Estado Actualizado` o `ExpdteActualizado`. Un archivo con las dos columnas usa la primera
+que calce; lo fija `tests/csv.test.ts`.
 
-## Paso 4 — Puerto y dominio
+Un archivo se previewa y después se inserta en una transacción, con el resultado
+registrado en `cargas` (leídos, insertados, duplicados, errores por fila).
 
-- **Port:** `3000` (el Dockerfile expone 3000 y la app escucha en `0.0.0.0`).
-- En **Domains** agregar el dominio/subdominio (ej. `juridico.tudominio.com`). Dokploy genera el HTTPS automáticamente con Let's Encrypt.
+**Fechas.** `DD/MM/AAAA`, `DD/MM/AA`, `DD-MM-AAAA` o ISO; se normalizan a `YYYY-MM-DD` y
+una que no calza (o que no existe en el calendario) **rechaza la fila** con mensaje legible
+en vez de guardar `NULL` y perder la fecha.
 
-## Paso 5 — Base de datos (primer deploy)
+**Escape de fórmulas.** Toda celda del CSV exportado va entrecomillada y, si arranca con
+`= + - @ TAB CR`, se le prefija `'` (`escaparCelulaCsv` en `lib/rutas.ts`). Sin esto, un
+valor como `=HYPERLINK(...)` se ejecuta al abrir el archivo en Excel o LibreOffice.
 
-Las tablas `dbo.app_usuarios`, `dbo.app_expedientes` y `dbo.app_cargas` y el usuario admin deben existir antes de usar la app:
+---
 
-1. Desde tu máquina, con acceso al SQL Server y a este repo:
+## API
 
-```bash
-npm install
-MSSQL_PASSWORD=... node scripts/seed.js
-```
+Rutas con guard de sesión; las de escritura y las de maestros requieren `ADMIN` donde el
+legado lo requería. Respuestas de error unificadas: `{ error: "..." }` con `400` de validación
+propia, `409` de conflicto (unicidad / clave foránea), `500` genérico — nunca se manda el
+mensaje de Postgres al navegador.
 
-2. Verificá que devuelva `Esquema aplicado OK` y que cree `admin`.
+| Ruta | Método | Descripción |
+|---|---|---|
+| `/api/health` | GET | `200 {ok:true}` / `503 {ok:false}` según la base. **Única ruta sin sesión** (healthcheck del orquestador); sin detalle en la respuesta |
+| `/api/auth/login` `/logout` `/me` | POST/POST/GET | sesión, rate-limited en login |
+| `/api/usuarios` `/[id]` | GET/POST/PUT/DELETE | usuarios y roles |
+| `/api/expedientes` | GET | listado con filtros, `q`, orden y paginación (cap 200) |
+| `/api/expedientes/[id]` | GET/DELETE | `{expediente, movimientos}`; el parámetro es el **número**, con `?centro=&unidad=` para desambiguar |
+| `/api/expedientes/nuevo` | POST | alta de un expediente |
+| `/api/expedientes/kpis` `/charts` | GET | métricas y gráficos del dashboard |
+| `/api/expedientes/import/preview` `/import` | POST | preview e inserción del CSV maestro |
+| `/api/expedientes/actualizar/preview` `/actualizar` | POST | actualización masiva de estado |
+| `/api/expedientes/cargados` | GET | auditoría de lo cargado por la app (`origen_carga` no nulo) |
+| `/api/expedientes/cargas` | GET | archivos subidos |
+| `/api/expedientes/export` | GET | CSV / PDF (`format=csv\|pdf`) |
+| `/api/caratula` | GET | búsqueda de carátula, con alias del shape legado (`ExpdteNro`, ...) |
+| `/api/caratula/[id]` | GET/PUT/DELETE | una carátula; el `PUT` escribe por la lista blanca de `actualizarExpediente` |
+| `/api/centros` `/[id]` | GET/POST/PUT/DELETE | maestro de centros |
+| `/api/provincias` `/[id]` | GET/POST/PUT/DELETE | maestro de provincias |
 
-Si preferís no instalar dependencias, ejecutá `scripts/migrate.sql` con `sqlcmd`/SSMS en el propio SQL Server y creá el usuario admin con el hash bcrypt generado desde la app (o un script auxiliar).
+---
 
-## Paso 6 — Deploy
+# Docker y Dokploy
 
-Click en **Deploy**. En los logs se debe ver la imagen build y el contenedor arrancando en `:3000`.
+## Una imagen, dos servicios
 
-### Redespliegue automático (webhook)
+`Dockerfile` en tres etapas (deps → builder con `next build` + `build:worker` → runner
+`node:20-alpine` con `standalone`). El `docker-entrypoint.sh` decide el rol por el primer
+argumento:
 
-Dokploy permite disparar el deploy desde GitHub Actions o `curl`. El webhook requiere `Content-Type: application/json` y el evento `push`:
+| Comando | Rol |
+|---|---|
+| `server` (default) | migraciones si `MIGRAR_AL_INICIAR=1` → seed opcional → Next |
+| `worker` | `node dist/node/worker/cli.js worker` — **no** migra, para no correr `ALTER TABLE` en paralelo con el otro servicio |
 
-```bash
-curl -X POST https://<dokploy>/api/deploy/<refreshToken> \
-  -H "Content-Type: application/json" \
-  -H "X-GitHub-Event: push" \
-  -d '{"ref":"refs/heads/master"}'
-```
+En el runner se copian `node_modules/nodemailer` y `node_modules/bcryptjs` a mano: Next no
+los trazó en `standalone` porque sólo los usa el worker y el seed.
+
+`docker-compose.yml` levanta `db` (Postgres 16, healthcheck, sin puertos publicados),
+`app` y `worker`. Sirve para probar localmente; en Dokploy la base ya existe y se apunta
+por `DATABASE_URL`.
+
+`deploy.replicas: 1` en `worker` es obligatorio: dos réplicas duplicarían los requests al
+PJud y el gasto de captcha.
+
+## Deploy
+
+1. **Base**: en Dokploy, crear/seleccionar la Postgres del bot y confirmar que la
+   `DATABASE_URL` del panel apunte a la misma. Al ser la base del bot, el padrón ya está.
+2. **Servicio `app`**: Application → esta repo, rama `unificar`, Dockerfile, comando
+   `server`. Variables: `DATABASE_URL`, `JWT_SECRET`, `MIGRAR_AL_INICIAR=1`, y
+   `SEED_AL_INICIAR=1` **sólo el primer arranque**.
+3. **Servicio `worker`**: misma imagen/repo, comando `worker`. Variables: `DATABASE_URL`,
+   `CAPTCHA_PROVIDER=twocaptcha`, `TWOCAPTCHA_KEY`, `REQUEST_DELAY_S`, `MAX_EXPEDIENTES_PER_RUN`,
+   `WORKER_INTERVALO_S`, y `SMTP_*` si querés el resumen por mail. **No necesita
+   `JWT_SECRET`**: no levanta el panel ni lee sesiones.
+4. **Dominio**: `app` al puerto 3000 detrás del proxy de Dokploy (TLS con Let's Encrypt).
+   El `worker` no expone puerto.
+5. **Redespliegue**: el webhook de Dokploy por push. Después del primer arranque, bajar
+   `SEED_AL_INICIAR` a `0`.
+
+Antes el deploy de juridico estaba bloqueado porque ningún Dokploy alcanzaba la LAN
+`192.168.35.222:1433` donde vivía el SQL Server. Con PostgreSQL ese bloqueo desaparece:
+la base y las apps están en el mismo host.
 
 ## Comprobación post-deploy
 
-1. Abrir la URL de la app → debe redirigir a `/login`.
-2. Ingresar con `admin` y la contraseña configurada.
-3. Ir a `/expedientes` y probar un filtro — la tabla debe listar registros de `[LegajoExpdtes].[dbo].[goolge2]`.
-4. Importar un archivo CSV → los registros deben aparecer en la pestaña **Registros cargados**.
+```bash
+curl -s https://<dominio>/api/health      # {"ok":true,"base":true}
+```
+
+Es la única API pública (el healthcheck del orquestador no tiene cookie) y no revela nada
+que el sitio público no revele: `{ok, base}` y el detalle del error se queda en el log.
+
+Entrar al panel, ver `/corridas` con el historial del bot (las `corridas` que ya están
+son del Python: mismo esquema, misma tabla), abrir una y de ahí un expediente.
 
 ## Solución de problemas
 
-- **"Failed to connect to <host>:1433"** → el SQL Server no acepta TCP. Habilitar TCP/IP en Configuration Manager, reiniciar el servicio y abrir el firewall en 1433.
-- **Login no funciona** → verificar que el seed se haya ejecutado (tabla `app_usuarios` con `admin`).
-- **No aparecen registros** → confirmar que la vista se llame `[LegajoExpdtes].[dbo].[goolge2]` en la base `LegajoExpdtes` y que existan datos.
-- **Mixed content (http/https)** → si la app se sirve por HTTPS, todo debe ir por HTTPS. La app es fullstack (misma URL), por lo que no aplican llamadas a otra API.
+- **`DATABASE_URL environment variable is required`**: falta o `lib/config.ts` no la
+  normalizó; aceptar el formato `postgresql+psycopg://` del bot es intencional.
+- **El worker no avanza**: el log dice `CAPTCHA_PROVIDER='none': configurá 'twocaptcha'`.
+  Con proveedor `playwright` tira que no está portado a Node: ese proveedor necesita un
+  navegador y se quedó en Python.
+- **Corrida `FAILED` con `CaptchaInvalido`**: no es un bug, es el abort diseñado. Verificar
+  la clave de 2captcha y el saldo; para los KO ya registrados, `retry-ko` con `--token` manual.
+- **Mail no llega**: sin `SMTP_HOST` o sin `MAIL_DESTINATARIOS` la corrida termina igual;
+  el resumen queda registrado en `notificaciones` con estado `ERROR`.
+- **Las fechas del panel salen un día corrimadas**: no debería pasar (ver "Modelo de
+  fechas"); si aparece, es que alguna lectura nueva está tomando la columna como `Date`.
+
+---
+
+## Checklist de seguridad
+
+Lo que se arrastra del bot y lo que agregó el port. Ninguna de estas cosas está resuelta
+"por el framework": hay que hacerlas en el host.
+
+- [ ] **Rotar la contraseña de Postgres** (`POSTGRES_PASSWORD` / la del rol de la app). La
+      base quedó expuesta durante el desarrollo del bot.
+- [ ] **Rol dedicado, sin superusuario**: el panel y el worker necesitan `SELECT/INSERT/
+      UPDATE` sobre las tablas propias, no `CREATEDB` ni acceso a `pg_catalog`.
+- [ ] **Firewall sobre `15432`**: la base no debe escuchar en la interfaz pública. En
+      compose no se publica ningún puerto; en Dokploy, revisar que el `db` tampoco.
+- [ ] **TLS**: `sslmode=require` en `DATABASE_URL` cuando Postgres está fuera del host. El
+      cliente **siempre verifica el certificado** — `no-verify` en la cadena se ignora a
+      propósito y hay que mandar la CA por `NODE_EXTRA_CA_CERTS`. `rejectUnauthorized:
+      false` está prohibido en este repo.
+- [ ] **Secretos sólo por variables de entorno**: nunca en un archivo commiteado, nunca en
+      un issue, nunca en un log. `TWOCAPTCHA_KEY`, `JWT_SECRET`, `SMTP_PASSWORD` y el token
+      de captcha (que viaja en la query del PJud) son secretos.
+- [ ] **Rotar `JWT_SECRET`** si se compartió o si se cree que una sesión se filtró.
+- [ ] **No commitear `.env`**: está en `.gitignore` (junto con `.env.local` y
+      `.env.*.local`). Antes de cada commit, revisar que no aparezca.
+- [ ] **Contraseña de admin fuerte** desde el seed: en producción `ADMIN_PASSWORD` es
+      obligatoria y se rechazan las conocidas.
+
+---
+
+## Referencia del legado
+
+Para el que venga detrás: el SQL Server seguía teniendo `[LegajoExpdtes].[dbo].[goolge2]`
+como vista de consulta, `ExpdtesCaratula` como maestro, `ExpdtesLineas` con el historial
+en XML y claves tipo `ExpdteId/ExpdteNro`. Las rutas de carátula aliasan esas claves
+(`CARATULA_SELECCION` en `lib/rutas.ts`) para no haber tenido que reescribir
+`app/caratula/page.tsx`. Todo lo demás ya habla el nombre de columna de Postgres.

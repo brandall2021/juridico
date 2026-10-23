@@ -1,80 +1,166 @@
-import sql from "mssql";
+import { Pool, types, type PoolClient, type QueryResult } from "pg";
+import { connectionString, entero, esProduccion } from "./config";
 
-function getConfig(): sql.config {
-  const host = process.env.MSSQL_HOST;
-  const user = process.env.MSSQL_USER;
-  const password = process.env.MSSQL_PASSWORD;
-  const database = process.env.MSSQL_DATABASE;
+/**
+ * Acceso a PostgreSQL con `pg` en crudo.
+ *
+ * No hay ORM ni constructor de queries: las consultas se escriben en SQL y se
+ *parametrizan siempre por posición (`$1`, `$2`), nunca por concatenación. Los
+ * nombres de tabla y columna que arma el código (ordenamiento, filtros de
+ * carátula) salen de listas blancas, no del usuario.
+ */
 
-  if (!host) throw new Error("MSSQL_HOST environment variable is required");
-  if (!user) throw new Error("MSSQL_USER environment variable is required");
-  if (!password) throw new Error("MSSQL_PASSWORD environment variable is required");
-  if (!database) throw new Error("MSSQL_DATABASE environment variable is required");
+/**
+ * Las columnas `date` (OID 1082) llegan como cadena `YYYY-MM-DD`, no como `Date`.
+ *
+ * Por qué: `pg` construye el `Date` a las **medianoche local** del proceso. Con
+ * `TZ=America/Argentina/Buenos_Aires` eso es `03:00Z`, y cualquier lectura que use
+ * getters de UTC (o que compare contra una fecha parseada del PJud, que es
+ * medianoche UTC) devuelve un día de menos. Como cadena, la comparación
+ * lexicográfica es el ordering del calendario y el resultado no depende de la zona
+ * del contenedor. Es el mismo criterio de `type Dia` en el motor (`lib/engine/pjud.ts`).
+ *
+ * `timestamptz` (1184) se deja con su parser: es un instante, no una fecha de calendario.
+ */
+types.setTypeParser(1082, (valor) => valor);
 
-  return {
-    server: host,
-    port: Number(process.env.MSSQL_PORT || 1433),
-    user,
-    password,
-    database,
-    options: {
-      encrypt: process.env.MSSQL_ENCRYPT === "true",
-      trustServerCertificate: process.env.MSSQL_TRUST_SERVER_CERT !== "false",
-      enableArithAbort: true,
-    },
-    pool: {
-      max: 10,
-      min: 0,
-      idleTimeoutMillis: 30000,
-    },
-  };
+export type Valores = unknown[];
+
+export type Ejecucion = {
+  rowCount: number;
+  rows: QueryResult["rows"];
+};
+
+type Cliente = Pick<PoolClient, "query">;
+
+function log(msg: string, extra?: unknown) {
+  console.log(`[db] ${msg}`, extra ?? "");
+}
+
+function crearPool(): Pool {
+  const url = connectionString();
+  const pideSsl = /sslmode=(require|verify-full|verify-ca|no-verify)/i.test(url);
+  const pool = new Pool({
+    connectionString: url,
+    // Si el enlace dice sslmode, se cifra. `no-verify` NO se honra: la conexión
+    // siempre verifica el certificado. Con un CA interno, la verificación se hace
+    // contra la autoridad que firmó (NODE_EXTRA_CA_CERTS), no desactivándola.
+    ssl: pideSsl ? { rejectUnauthorized: true } : undefined,
+    max: entero("DB_POOL_MAX", 10),
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: entero("DB_TIMEOUT_CONEXION_MS", 10_000),
+    // statement_timeout corta un query colgado antes de que se lleve el proceso
+    // por delante (el worker mantiene conexiones abiertas durante minutos).
+    statement_timeout: entero("DB_STATEMENT_TIMEOUT_MS", 60_000),
+  });
+
+  pool.on("error", (err) => {
+    // Un error en una conexión ociosa no debe tumbar el proceso.
+    log("error en conexión ociosa", err.message);
+  });
+
+  return pool;
 }
 
 declare global {
   // eslint-disable-next-line no-var
-  var __mssql: sql.ConnectionPool | undefined;
-  // eslint-disable-next-line no-var
-  var __mssqlPromise: Promise<sql.ConnectionPool> | undefined;
+  var __pgPool: Pool | undefined;
 }
 
-export async function getPool(): Promise<sql.ConnectionPool> {
-  if (global.__mssql) return global.__mssql;
-  if (global.__mssqlPromise) return global.__mssqlPromise;
-
-  global.__mssqlPromise = (async () => {
-    const pool = await new sql.ConnectionPool(getConfig()).connect();
-    pool.on("error", (err) => console.error("MSSQL pool error:", err));
-    global.__mssql = pool;
-    global.__mssqlPromise = undefined;
-    return pool;
-  })();
-
-  return global.__mssqlPromise;
+export function pool(): Pool {
+  if (!global.__pgPool) global.__pgPool = crearPool();
+  return global.__pgPool;
 }
 
-export async function query<T = any>(
-  queryText: string,
-  params: Record<string, string | number | null | undefined> = {}
+/** Filas de un query. `number` de Postgres llega como string en BIGINT: se deja tal cual. */
+export async function consultar<T = Record<string, unknown>>(
+  texto: string,
+  valores: Valores = []
 ): Promise<T[]> {
-  const pool = await getPool();
-  const request = pool.request();
-  for (const [key, value] of Object.entries(params)) {
-    request.input(key, value ?? null);
-  }
-  const result = await request.query(queryText);
-  return result.recordset as T[];
+  // `rows as T[]` en vez de `query<T>`: pg exige que el genérico extienda
+  // QueryResultRow, y acá los tipos de fila se declaran en cada llamado (varios
+  // son parciales o columnas renombradas con AS).
+  const res = await pool().query(texto, valores as never[]);
+  return res.rows as T[];
 }
 
-export async function execute(
-  queryText: string,
-  params: Record<string, string | number | null | undefined> = {}
-): Promise<sql.IResult<any>> {
-  const pool = await getPool();
-  const request = pool.request();
-  for (const [key, value] of Object.entries(params)) {
-    request.input(key, value ?? null);
-  }
-  return request.query(queryText);
+/** Primera fila o null, para los queries de un solo registro. */
+export async function consultarUno<T = Record<string, unknown>>(
+  texto: string,
+  valores: Valores = []
+): Promise<T | null> {
+  const filas = await consultar<T>(texto, valores);
+  return filas[0] ?? null;
 }
 
-export default sql;
+/** Para INSERT/UPDATE/DELETE: devuelve cuántas filas afectó y las RETURNING. */
+export async function ejecutar(texto: string, valores: Valores = []): Promise<Ejecucion> {
+  const res = await pool().query(texto, valores as never[]);
+  return { rowCount: res.rowCount ?? 0, rows: res.rows ?? [] };
+}
+
+/**
+ * Transacción: `BEGIN`/`COMMIT` y `ROLLBACK` ante cualquier error. Se usa en las
+ * cargas masivas, donde medio archivo aplicado es peor que ninguno.
+ */
+export async function enTransaccion<T>(fn: (tx: Cliente) => Promise<T>): Promise<T> {
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+    const resultado = await fn(client);
+    await client.query("COMMIT");
+    return resultado;
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** Versión de transacción sobre un cliente suelto (para el runner de migraciones). */
+export async function conCliente<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool().connect();
+  try {
+    return await fn(client);
+  } finally {
+    client.release();
+  }
+}
+
+export async function cerrarPool(): Promise<void> {
+  if (global.__pgPool) {
+    await global.__pgPool.end();
+    global.__pgPool = undefined;
+  }
+}
+
+/** Ping de salud: lo usa /api/health para distinguir "app arriba" de "base reachable". */
+export async function estanSanos(): Promise<{ base: boolean; error?: string }> {
+  try {
+    await consultar("SELECT 1 AS ok");
+    return { base: true };
+  } catch (e) {
+    const mensaje = e instanceof Error ? e.message : String(e);
+    if (esProduccion()) log("base inaccesible", mensaje);
+    return { base: false, error: mensaje };
+  }
+}
+
+/**
+ * Postgres devuelve los aggregate counters como string. En vez de dispersar
+ * Number() por las rutas, se convierte en la frontera.
+ */
+export function num(valor: unknown): number {
+  if (typeof valor === "number") return valor;
+  const n = Number(valor ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function fecha(valor: unknown): string | null {
+  if (!valor) return null;
+  const d = valor instanceof Date ? valor : new Date(String(valor));
+  return Number.isNaN(d.getTime()) ? String(valor) : d.toISOString();
+}
+
+export default { consultar, consultarUno, ejecutar, enTransaccion, pool };

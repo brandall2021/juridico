@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { insertarEnCaratula, CargaInput } from "@/lib/expedientes";
+import { darAlta, type CargaInput } from "@/lib/expedientes";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
+/**
+ * Alta manual de un expediente.
+ *
+ * `historia` ya no es un campo: la historia del expediente es la tabla
+ * `movimientos` (la alimenta el worker y la devuelve GET /api/expedientes/[id]).
+ * `documento` ahora sí se guarda: antes vivía en ExpdtesLineas y se descartaba.
+ */
 const CAMPOS: (keyof CargaInput)[] = [
   "centroJudicial",
   "unidadJudicial",
@@ -19,7 +27,6 @@ const CAMPOS: (keyof CargaInput)[] = [
   "estadoProcesal",
   "estadoProcesalNombre",
   "caratula",
-  "historia",
 ];
 
 export async function POST(req: NextRequest) {
@@ -33,36 +40,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El campo 'expdte' es obligatorio" }, { status: 400 });
     }
 
-    const carga: CargaInput = {
-      centroJudicial: body.centroJudicial ? String(body.centroJudicial) : null,
-      unidadJudicial: body.unidadJudicial ? String(body.unidadJudicial) : null,
-      cenJudId: body.cenJudId ? String(body.cenJudId) : null,
-      expdte,
-      actor: body.actor ? String(body.actor) : null,
-      demandado: body.demandado ? String(body.demandado) : null,
-      fecha: body.fecha ? String(body.fecha) : null,
-      descripcion: body.descripcion ? String(body.descripcion) : null,
-      documento: body.documento ? String(body.documento) : null,
-      fechaProcesado: body.fechaProcesado ? String(body.fechaProcesado) : null,
-      estado: body.estado ? String(body.estado) : null,
-      estadoProcesal: body.estadoProcesal ? String(body.estadoProcesal) : null,
-      estadoProcesalNombre: body.estadoProcesalNombre ? String(body.estadoProcesalNombre) : null,
-      caratula: body.caratula ? String(body.caratula) : null,
-      historia: body.historia ? String(body.historia) : null,
-    };
+    const carga = Object.fromEntries(
+      CAMPOS.map((campo) => [campo, body[campo] ? String(body[campo]) : null])
+    ) as CargaInput;
+    carga.expdte = expdte;
 
-    // Documento se ignora (vive en ExpdtesLineas, no en ExpdtesCaratula)
-    const { insertados, errores } = await insertarEnCaratula([carga], session!.id, "MANUAL");
+    const resultado = await darAlta(carga, session!.id, "MANUAL");
+    const errores = resultado.error ? [resultado.error] : [];
 
-    if (insertados === 0) {
+    if (!resultado.insertado) {
       return NextResponse.json({ error: `No se pudo insertar: ${errores.join("; ")}` }, { status: 400 });
     }
 
     return NextResponse.json(
-      { ok: true, expdte, insertados, errores, cargadoPor: session!.username },
+      { ok: true, expdte, id: resultado.id, insertados: 1, errores, cargadoPor: session!.username },
       { status: 201 }
     );
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+  } catch (err) {
+    return respuestaDeError("expedientes/nuevo", err);
   }
 }

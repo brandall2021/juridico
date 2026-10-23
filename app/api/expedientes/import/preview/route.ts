@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCsvPreview } from "@/lib/csv";
 import { requireAuth } from "@/lib/auth";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const { session, response } = requireAuth(req);
+  const { response } = requireAuth(req);
   if (response) return response;
 
   try {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     const { columns, rows, total, errors } = await parseCsvPreview(buffer);
 
     return NextResponse.json({ columns, rows, total, errors });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+  } catch (err) {
+    return respuestaDeError("expedientes/import/preview", err);
   }
 }

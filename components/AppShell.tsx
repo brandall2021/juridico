@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FolderOpen, Upload, FileArchive, Building2, MapPin, Table2, Users, RotateCcw } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Upload, FileArchive, Building2, MapPin, Table2, Users, RotateCcw, Activity } from "lucide-react";
 import { getMe } from "@/lib/client";
 import type { Kpis } from "@/components/KpiCards";
 
@@ -20,6 +20,14 @@ const NAV = [
 ];
 
 type NavItem = (typeof NAV)[number];
+
+// Seguimiento de corridas y usuarios: sólo ADMIN. La barrera de verdad está en cada
+// página (`sesionAdmin()` de lib/sesion.ts); este recorte es para que el menú no
+// ofrezca una entrada que después redirige.
+const NAV_ADMIN: NavItem[] = [
+  { href: "/corridas", label: "Corridas", Icon: Activity },
+  { href: "/usuarios", label: "Usuarios", Icon: Users },
+];
 
 function fmtFecha(s: string | null | undefined) {
   if (!s) return "—";
@@ -48,7 +56,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  const nav: NavItem[] = user?.rol === "ADMIN" ? [...NAV, { href: "/usuarios", label: "Usuarios", Icon: Users }] : NAV;
+  const nav: NavItem[] = user?.rol === "ADMIN" ? [...NAV, ...NAV_ADMIN] : NAV;
 
   return (
     <div className="app-shell">

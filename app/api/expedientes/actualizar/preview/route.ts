@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseBulkUpdateCsv } from "@/lib/expedientes-actualizacion.js";
+import { parseCsvActualizar } from "@/lib/csv";
 import { requireAuth } from "@/lib/auth";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
@@ -16,9 +17,9 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const preview = await parseBulkUpdateCsv(buffer);
+    const preview = await parseCsvActualizar(buffer);
     return NextResponse.json(preview);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Error interno del servidor" }, { status: 500 });
+  } catch (err) {
+    return respuestaDeError("expedientes/actualizar/preview", err);
   }
 }

@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/logout"];
+// /api/health se deja afuera a propósito: lo necesita el healthcheck de Dokploy o del
+// proxy, que no tienen sesión. La ruta no revela nada que el sitio público no revele:
+// devuelve sólo `{ok, base}` y el detalle del error queda en el log del servidor.
+const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/logout", "/api/health"];
 
 // Routes that require ADMIN role
 const ADMIN_ROUTES = ["/usuarios", "/api/usuarios"];

@@ -1,57 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { consultar, consultarUno, num } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { CARATULA_TABLE } from "@/lib/expdtes-caratula.js";
+import { CARATULA_DE, CARATULA_SELECCION, respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
+/**
+ * Listing de la carátula (antes dbo.ExpdtesCaratula). La tabla es `expedientes` y
+ * las claves de la respuesta se aliasan para no modificar la página.
+ */
 export async function GET(req: NextRequest) {
   const { response } = requireAuth(req);
   if (response) return response;
 
   try {
     const url = new URL(req.url);
-    const page = Math.max(1, Number(url.searchParams.get("page") || 1));
-    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize") || 25)));
-    const q = url.searchParams.get("q")?.trim();
+    const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize") || 25) || 25));
     const offset = (page - 1) * pageSize;
+    const q = url.searchParams.get("q")?.trim();
 
-    const where: string[] = [];
-    const params: Record<string, string | number> = { offset, pageSize };
+    const condiciones: string[] = [];
+    const valores: unknown[] = [];
+
     if (q) {
-      where.push(
-        "(CAST(ExpdteId AS VARCHAR(20)) LIKE '%' + @q + '%' OR RTRIM(ExpdteNro) LIKE '%' + @q + '%' OR RTRIM(ExpdteCaratula) LIKE '%' + @q + '%' OR RTRIM(ExpdteActor) LIKE '%' + @q + '%' OR RTRIM(ExpdteDemandado) LIKE '%' + @q + '%')"
+      valores.push(`%${q}%`);
+      condiciones.push(
+        `(e.id::text ILIKE $${valores.length} OR e.numero ILIKE $${valores.length}
+          OR e.caratula ILIKE $${valores.length} OR e.actor ILIKE $${valores.length}
+          OR e.demandado ILIKE $${valores.length})`
       );
-      params.q = q;
     }
 
-    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-    const totalRows = await query<{ total: number }>(`SELECT COUNT(*) AS total FROM ${CARATULA_TABLE} ${whereSql}`, params);
-    const rows = await query(
-      `SELECT
-         ExpdteId,
-         RTRIM(ExpdteNro) AS ExpdteNro,
-         RTRIM(ExpdteCaratula) AS ExpdteCaratula,
-         RTRIM(ExpdteActor) AS ExpdteActor,
-         RTRIM(ExpdteDemandado) AS ExpdteDemandado,
-         ExpdteCenJudId,
-         RTRIM(ExpdteUnidadJud) AS ExpdteUnidadJud,
-         RTRIM(ExpdteProvinciaNombre) AS ExpdteProvinciaNombre,
-         RTRIM(ExpdteActualizado) AS ExpdteActualizado,
-         CONVERT(nvarchar(10), ExpdteFchUltMov, 120) AS ExpdteFchUltMov,
-         CONVERT(nvarchar(10), ExpdteFchUltProc, 120) AS ExpdteFchUltProc,
-         RTRIM(ExpdteUltMovDescripcion) AS ExpdteUltMovDescripcion,
-         RTRIM(c.CentroJudNombre) AS CentroJudNombre
-       FROM ${CARATULA_TABLE} e
-       LEFT JOIN dbo.CentrosJudiciales c ON c.CentroJudId = e.ExpdteCenJudId
-       ${whereSql}
-       ORDER BY ExpdteId DESC
-       OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
-      params
+    const where = condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "";
+
+    const conteo = await consultarUno<{ total: number | string }>(
+      `SELECT COUNT(*) AS total ${CARATULA_DE} ${where}`,
+      valores
     );
 
-    return NextResponse.json({ total: totalRows[0]?.total ?? 0, page, pageSize, rows });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    const pagina = [...valores, offset, pageSize];
+    const rows = await consultar<Record<string, unknown>>(
+      `SELECT ${CARATULA_SELECCION}
+         ${CARATULA_DE}
+         ${where}
+        ORDER BY e.id DESC
+        OFFSET $${valores.length + 1} LIMIT $${valores.length + 2}`,
+      pagina
+    );
+
+    return NextResponse.json({ total: num(conteo?.total ?? 0), page, pageSize, rows });
+  } catch (err) {
+    return respuestaDeError("caratula", err);
   }
 }

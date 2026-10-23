@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCsv, type ColumnMapping } from "@/lib/csv";
-import { insertarEnCaratula, registrarCarga } from "@/lib/expedientes";
+import { cargarLote, registrarCarga } from "@/lib/expedientes";
 import { requireAuth } from "@/lib/auth";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
@@ -33,16 +34,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se encontraron registros válidos en el CSV", errors }, { status: 400 });
     }
 
-    const { insertados, errores, duplicados } = await insertarEnCaratula(records, session!.id, "CSV");
+    // cargarLote corre en una sola transacción y descarta duplicados con
+    // ON CONFLICT (numero, jurisdiccion) DO NOTHING: el conteo es exacto.
+    const lote = await cargarLote(records, session!.id, "CSV");
+    const errores = [...errors, ...lote.errores];
 
     const cargaId = await registrarCarga(
       {
         archivo: file.name,
         tamano: file.size,
         filasLeidas: records.length,
-        insertados,
-        duplicados,
-        errores: [...errors, ...errores],
+        insertados: lote.insertados,
+        duplicados: lote.duplicados,
+        errores,
       },
       session!.id
     );
@@ -51,11 +55,11 @@ export async function POST(req: NextRequest) {
       ok: true,
       cargaId,
       totalLeidos: records.length,
-      insertados,
-      duplicados,
-      errores: [...errors, ...errores],
+      insertados: lote.insertados,
+      duplicados: lote.duplicados,
+      errores,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+  } catch (err) {
+    return respuestaDeError("expedientes/import", err);
   }
 }

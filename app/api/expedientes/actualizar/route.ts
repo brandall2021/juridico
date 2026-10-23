@@ -1,9 +1,8 @@
-import sql from "mssql";
 import { NextRequest, NextResponse } from "next/server";
-import { getPool } from "@/lib/db";
+import { parseCsvActualizar, type ActualizarRegistro } from "@/lib/csv";
+import { actualizarEnMasa, registrarCarga } from "@/lib/expedientes";
 import { requireAuth } from "@/lib/auth";
-import { parseBulkUpdateCsv, processBulkUpdateRows } from "@/lib/expedientes-actualizacion.js";
-import { registrarCarga } from "@/lib/expedientes";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
@@ -19,49 +18,44 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { records, errors } = await parseBulkUpdateCsv(buffer);
+    const { records, errors } = await parseCsvActualizar(buffer);
 
     if (records.length === 0) {
       return NextResponse.json({ error: "No se encontraron registros válidos en el CSV", errors }, { status: 400 });
     }
 
-    const pool = await getPool();
-    const tx = new sql.Transaction(pool);
-    await tx.begin();
+    // actualizarEnMasa abre su propia transacción y reporta por fila: un archivo
+    // que se cae a la mitad no deja medio padrón con el estado cambiado.
+    // Las filas sin número ya se avisaron en `errors` (las genera el parseo de CSV),
+    // así que acá se descartan: no se actualiza nada sin expediente.
+    const conNumero = records.filter((r): r is ActualizarRegistro & { expdte: string } => r.expdte !== null);
+    const masa = await actualizarEnMasa(conNumero);
+    const errores = [...errors, ...masa.errores];
 
-    try {
-      const rowResult = await processBulkUpdateRows({
-        tx,
-        records,
-      });
+    const cargaId = await registrarCarga(
+      {
+        archivo: file.name,
+        tamano: file.size,
+        filasLeidas: records.length,
+        // Como antes: la planilla de "Archivos subidos" muestra los estados
+        // modificados en la columna Insertados, y ahora además queda en Actualizados.
+        insertados: masa.actualizados,
+        duplicados: 0,
+        actualizados: masa.actualizados,
+        errores,
+        origen: "CSV-UPDATE",
+      },
+      session!.id
+    );
 
-      await tx.commit();
-
-      const cargaId = await registrarCarga(
-        {
-          archivo: file.name,
-          tamano: file.size,
-          filasLeidas: records.length,
-          insertados: rowResult.updated,
-          duplicados: 0,
-          errores: [...errors, ...rowResult.errors],
-          origen: "CSV-UPDATE",
-        },
-        session!.id
-      );
-
-      return NextResponse.json({
-        ok: true,
-        cargaId,
-        totalLeidos: records.length,
-        actualizados: rowResult.updated,
-        errores: [...errors, ...rowResult.errors],
-      });
-    } catch (err) {
-      await tx.rollback();
-      throw err;
-    }
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Error interno del servidor" }, { status: 500 });
+    return NextResponse.json({
+      ok: true,
+      cargaId,
+      totalLeidos: records.length,
+      actualizados: masa.actualizados,
+      errores,
+    });
+  } catch (err) {
+    return respuestaDeError("expedientes/actualizar", err);
   }
 }

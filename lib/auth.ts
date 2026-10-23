@@ -3,7 +3,9 @@ import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
-const COOKIE_NAME = "juridico_token";
+// Exportado: las páginas de servidor leen la misma cookie desde lib/sesion.ts y si
+// el nombre se duplica, la barra lateral y el panel se desincronizan en silencio.
+export const COOKIE_NAME = "juridico_token";
 
 export type SessionUser = {
   id: number;

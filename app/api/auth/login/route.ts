@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { consultarUno, ejecutar, num } from "@/lib/db";
 import { comparePassword, setAuthCookie, signToken } from "@/lib/auth";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,15 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
+type FilaUsuario = {
+  id: number | string;
+  username: string;
+  password_hash: string;
+  nombre: string;
+  rol: string;
+  activo: boolean;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
@@ -45,34 +55,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Usuario y contraseña requeridos" }, { status: 400 });
     }
 
-    const users = await query<{
-      id: number;
-      username: string;
-      password_hash: string;
-      nombre: string;
-      rol: string;
-    }>(
-      "SELECT id, username, password_hash, nombre, rol FROM dbo.app_usuarios WHERE username = @username",
-      { username }
+    const user = await consultarUno<FilaUsuario>(
+      `SELECT id, username, password_hash, nombre, rol, activo
+         FROM usuarios
+        WHERE username = $1
+        LIMIT 1`,
+      [username]
     );
 
-    const user = users[0];
+    // Credenciales incorrectas: mismo mensaje que antes, sin revelar si el usuario existe.
     if (!user || !(await comparePassword(password, user.password_hash))) {
       return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
     }
 
+    // Un usuario desactivado no puede entrar aunque la contraseña siga siendo válida.
+    // El estado se avisa recién con credenciales correctas: si no, cualquiera podría
+    // sondear qué usernames existen.
+    if (user.activo === false) {
+      return NextResponse.json(
+        { error: "Usuario desactivado. Contactá a un administrador." },
+        { status: 403 }
+      );
+    }
+
+    // El registro de último acceso no puede tumbar un login válido.
+    await ejecutar("UPDATE usuarios SET ultimo_acceso = now() WHERE id = $1", [num(user.id)]).catch(
+      (err: unknown) => console.error("[api/auth/login] no se pudo registrar ultimo_acceso:", err)
+    );
+
     const token = signToken({
-      id: user.id,
+      id: num(user.id),
       username: user.username,
       nombre: user.nombre,
       rol: user.rol,
     });
 
     return setAuthCookie(token);
-  } catch {
-    return NextResponse.json(
-      { error: "Error interno del servidor" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return respuestaDeError("auth/login", err);
   }
 }

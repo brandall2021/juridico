@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
 import PDFDocument from "pdfkit";
-import { query } from "@/lib/db";
+import { consultar } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { buildWhere, EXPEDIENTES_SOURCE, VISTA_FIELDS, orderBy } from "@/lib/consulta";
+import { CAMPOS_LISTADO, FUENTE, construirFiltros, filasVista, orden } from "@/lib/consulta";
+import { filaCsv, respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
@@ -24,14 +25,9 @@ const EXPORT_COLS: [key: string, label: string][] = [
 const CSV_MAX = 10000;
 const PDF_MAX = 800;
 
-function csvEsc(v: unknown): string {
-  const t = v == null ? "" : String(v).trim();
-  return `"${t.replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
-}
-
-function buildCsv(rows: any[]): string {
-  const header = EXPORT_COLS.map(([, label]) => csvEsc(label)).join(";");
-  const body = rows.map((r) => EXPORT_COLS.map(([key]) => csvEsc(r[key])).join(";"));
+function buildCsv(rows: Record<string, unknown>[]): string {
+  const header = filaCsv(EXPORT_COLS.map(([, label]) => label));
+  const body = rows.map((r) => filaCsv(EXPORT_COLS.map(([key]) => r[key])));
   return "\uFEFF" + [header, ...body].join("\r\n");
 }
 
@@ -43,7 +39,7 @@ function hoy(): string {
   });
 }
 
-function buildPdf(rows: any[], logoPath: string | null, total: number): Promise<Buffer> {
+function buildPdf(rows: Record<string, unknown>[], logoPath: string | null, total: number): Promise<Buffer> {
   const fontRegular = path.join(process.cwd(), "public", "fonts", "DejaVuSans.ttf");
   const fontBold = path.join(process.cwd(), "public", "fonts", "DejaVuSans-Bold.ttf");
   const hasFonts = fs.existsSync(fontRegular) && fs.existsSync(fontBold);
@@ -142,14 +138,20 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const formato = url.searchParams.get("formato") === "pdf" ? "pdf" : "csv";
-    const { where, params } = buildWhere(url.searchParams);
-    const order = orderBy(url.searchParams);
+    const { where, valores } = construirFiltros(url.searchParams);
+    const orderSql = orden(url.searchParams);
     const maxRows = formato === "csv" ? CSV_MAX : PDF_MAX;
 
-    const rows = await query(
-      `SELECT TOP (@maxRows) ${VISTA_FIELDS.join(", ")} FROM ${EXPEDIENTES_SOURCE} ${where} ORDER BY ${order}`,
-      { ...params, maxRows }
+    // TOP (@maxRows) -> LIMIT $n: el tope va como parámetro, no concatenado.
+    const filas = await consultar<Record<string, unknown>>(
+      `SELECT ${CAMPOS_LISTADO.join(", ")}
+         FROM ${FUENTE}
+         ${where}
+        ORDER BY ${orderSql}
+        LIMIT $${valores.length + 1}`,
+      [...valores, maxRows]
     );
+    const rows = filasVista(filas);
 
     if (formato === "csv") {
       const csv = buildCsv(rows.slice(0, CSV_MAX));
@@ -171,7 +173,7 @@ export async function GET(req: NextRequest) {
         "Content-Disposition": `attachment; filename="expedientes.pdf"`,
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+  } catch (err) {
+    return respuestaDeError("expedientes/export", err);
   }
 }

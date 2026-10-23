@@ -1,78 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { consultar, consultarUno, num } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { FECHA_PROCESADO_EXPR } from "@/lib/consulta";
+import { CAMPOS_LISTADO, FUENTE, construirFiltros, filasVista, paginacion } from "@/lib/consulta";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
+/**
+ * Auditoría de lo que cargó la app.
+ *
+ * `dbo.app_expedientes` ya no existe: era una copia del alta en ExpdtesCaratula.
+ * El registro ahora ES la fila de `expedientes`, marcada con `origen_carga`
+ * (MANUAL / CSV / MASIVO) y `creado_por`, así que esta ruta es el mismo listado
+ * de la vista filtrado por `origen_carga IS NOT NULL`, con los mismos filtros y
+ * el filtro `origen` de siempre. Las fechas de carga por archivo están en
+ * /api/expedientes/cargas.
+ */
 export async function GET(req: NextRequest) {
   const { response } = requireAuth(req);
   if (response) return response;
 
   try {
     const url = new URL(req.url);
-    const where: string[] = [];
-    const params: Record<string, string> = {};
+    const filtros = construirFiltros(url.searchParams);
 
-    const filters: Record<string, string> = {
-      centro: "centro_judicial",
-      unidad: "unidad_judicial",
-      expdte: "expdte",
-      actor: "actor",
-      demandado: "demandado",
-      descripcion: "descripcion",
-      documento: "documento",
-      estado: "estado",
-      origen: "origen",
-    };
+    // construirFiltros devuelve "WHERE a ILIKE $1 AND ..." (o string vacío); acá se
+    // le agrega la condición de auditoría adelante, por lo que se quita el `WHERE`.
+    const condiciones = [
+      "origen_carga IS NOT NULL",
+      ...(filtros.where ? [filtros.where.replace(/^WHERE\s+/, "")] : []),
+    ];
+    const valores: unknown[] = [...filtros.valores];
 
-    for (const [key, field] of Object.entries(filters)) {
-      const v = url.searchParams.get(key)?.trim();
-      if (v) {
-        const p = `p_${key}`;
-        where.push(`[${field}] LIKE '%' + @${p} + '%'`);
-        params[p] = v;
-      }
+    const origen = url.searchParams.get("origen")?.trim();
+    if (origen) {
+      valores.push(`%${origen}%`);
+      condiciones.push(`origen_carga ILIKE $${valores.length}`);
     }
 
-    const q = url.searchParams.get("q")?.trim();
-    if (q) {
-      where.push(`([expdte] LIKE '%' + @q + '%' OR [actor] LIKE '%' + @q + '%' OR [demandado] LIKE '%' + @q + '%' OR [descripcion] LIKE '%' + @q + '%')`);
-      params["q"] = q;
-    }
+    const where = `WHERE ${condiciones.join(" AND ")}`;
+    const { page, pageSize, offset } = paginacion(url.searchParams);
 
-    const fechaDesde = url.searchParams.get("fechaProcesadoDesde")?.trim();
-    if (fechaDesde) {
-      where.push(`${FECHA_PROCESADO_EXPR} >= TRY_CONVERT(date, @p_fechaProcesadoDesde, 23)`);
-      params.p_fechaProcesadoDesde = fechaDesde;
-    }
-
-    const fechaHasta = url.searchParams.get("fechaProcesadoHasta")?.trim();
-    if (fechaHasta) {
-      where.push(`${FECHA_PROCESADO_EXPR} <= TRY_CONVERT(date, @p_fechaProcesadoHasta, 23)`);
-      params.p_fechaProcesadoHasta = fechaHasta;
-    }
-
-    const page = Math.max(1, Number(url.searchParams.get("page") || 1));
-    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize") || 20)));
-    const offset = (page - 1) * pageSize;
-    const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
-
-    const countRows = await query<{ total: number }>(
-      `SELECT COUNT(*) AS total FROM dbo.app_expedientes ${whereSql}`,
-      params
-    );
-    const total = countRows[0]?.total ?? 0;
-
-    const rows = await query(
-      `SELECT id, centro_judicial AS [Centro Judicial], unidad_judicial AS [Unidad Judicial], expdte AS [Expdte], actor AS [Actor], demandado AS [Demandado], fecha AS [Fecha], descripcion AS [Descripcion], documento AS [Documento], fecha_procesado AS [Fecha Procesado], estado AS [Estado], estado_procesal AS [Estado Procesal], estado_procesal_nombre AS [Estado Nombre], cen_jud_id AS [Id Centro], origen AS [Origen], real_id AS [IdReal], creado_por AS [CreadoPor], creado_en AS [CreadoEn]
-       FROM dbo.app_expedientes ${whereSql}
-       ORDER BY id DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
-      { ...params, offset, pageSize }
+    const conteo = await consultarUno<{ total: number | string }>(
+      `SELECT COUNT(*) AS total FROM ${FUENTE} ${where}`,
+      valores
     );
 
-    return NextResponse.json({ total, page, pageSize, rows });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    const filas = await consultar<Record<string, unknown>>(
+      `SELECT ${CAMPOS_LISTADO.join(", ")}
+         FROM ${FUENTE}
+         ${where}
+        ORDER BY id DESC
+        OFFSET $${valores.length + 1} LIMIT $${valores.length + 2}`,
+      [...valores, offset, pageSize]
+    );
+
+    // filaVista ya trae `Origen` (origen_carga) y `Creado Por` (el usuario), que son
+    // las claves que lee la pestaña "Registros cargados".
+    return NextResponse.json({
+      total: num(conteo?.total ?? 0),
+      page,
+      pageSize,
+      rows: filasVista(filas),
+    });
+  } catch (err) {
+    return respuestaDeError("expedientes/cargados", err);
   }
 }

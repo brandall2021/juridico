@@ -1,12 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { consultar, consultarUno, num } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { EXPEDIENTES_SOURCE } from "@/lib/consulta";
+import { FUENTE } from "@/lib/consulta";
+import { respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
-const FECHA_FP =
-  "COALESCE(TRY_CONVERT(date, [Fecha Procesado], 103), TRY_CONVERT(date, [Fecha Procesado], 120))";
+/**
+ * Datos de los gráficos del panel, sobre `vista_expedientes`.
+ *
+ * En la vista legada `[Estado]` mezclaba el resultado de la consulta (SI/NO/KO) con
+ * textos tipo ACTIVO; el espejo exacto hoy es la columna `actualizado`, así que los
+ * grupos y el resumen activo/inactivo se calculan sobre esa columna conservando los
+ * valores que ya reconocía la query anterior.
+ *
+ * Cada punto se devuelve con `nombre` Y `name`: el legado respondía con `nombre` y
+ * los componentes (DashboardCharts / buildEstadoChartData) leen `name`. Emitir las
+ * dos claves mantiene el shape de la respuesta y deja los gráficos etiquetados.
+ */
+type Punto = { nombre: string; name: string; value: number };
+
+function puntos(filas: { nombre: unknown; value: unknown }[]): Punto[] {
+  return filas.map((f) => {
+    const nombre = String(f.nombre ?? "");
+    return { nombre, name: nombre, value: num(f.value) };
+  });
+}
 
 function ultimosMeses(n: number): string[] {
   const out: string[] = [];
@@ -18,61 +37,69 @@ function ultimosMeses(n: number): string[] {
   return out;
 }
 
+const ESTADO = "COALESCE(NULLIF(TRIM(actualizado), ''), 'Sin estado')";
+const CON_DOC = "documento IS NOT NULL AND TRIM(documento) <> ''";
+const CENTRO = "COALESCE(NULLIF(TRIM(centro_judicial), ''), 'Sin centro')";
+const UNIDAD = "COALESCE(NULLIF(TRIM(unidad_judicial), ''), 'Sin unidad')";
+
 export async function GET(req: NextRequest) {
   const { response } = requireAuth(req);
   if (response) return response;
 
   try {
     const [estados, documentos, porMesRaw, centros, unidades] = await Promise.all([
-      query<{ nombre: string; value: number }>(
-        `SELECT COALESCE(NULLIF(LTRIM(RTRIM([Estado])), ''), 'Sin estado') AS nombre, COUNT(*) AS value
-          FROM ${EXPEDIENTES_SOURCE}
-          GROUP BY COALESCE(NULLIF(LTRIM(RTRIM([Estado])), ''), 'Sin estado')
+      consultar<{ nombre: unknown; value: unknown }>(
+        `SELECT ${ESTADO} AS nombre, COUNT(*) AS value
+           FROM ${FUENTE}
+          GROUP BY ${ESTADO}
           ORDER BY COUNT(*) DESC, nombre ASC`
       ),
-      query<{ nombre: string; value: number }>(
-        `SELECT CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 'Con documento' ELSE 'Sin documento' END AS nombre, COUNT(*) AS value
-         FROM ${EXPEDIENTES_SOURCE} GROUP BY CASE WHEN [Documento] IS NOT NULL AND LTRIM(RTRIM([Documento])) <> '' THEN 'Con documento' ELSE 'Sin documento' END`
+      consultar<{ nombre: unknown; value: unknown }>(
+        `SELECT CASE WHEN ${CON_DOC} THEN 'Con documento' ELSE 'Sin documento' END AS nombre, COUNT(*) AS value
+           FROM ${FUENTE}
+          GROUP BY CASE WHEN ${CON_DOC} THEN 'Con documento' ELSE 'Sin documento' END`
       ),
-      query<{ mes: string; total: number }>(
-        `SELECT CONVERT(VARCHAR(7), ${FECHA_FP}, 120) AS mes, COUNT(*) AS total
-         FROM ${EXPEDIENTES_SOURCE}
-         WHERE ${FECHA_FP} IS NOT NULL
-         GROUP BY CONVERT(VARCHAR(7), ${FECHA_FP}, 120)`
+      consultar<{ mes: string; total: unknown }>(
+        `SELECT to_char(fch_ult_proc, 'YYYY-MM') AS mes, COUNT(*) AS total
+           FROM ${FUENTE}
+          WHERE fch_ult_proc IS NOT NULL
+          GROUP BY to_char(fch_ult_proc, 'YYYY-MM')`
       ),
-      query<{ nombre: string; value: number }>(
-        `SELECT TOP 6 COALESCE(NULLIF(LTRIM(RTRIM([Centro Judicial])), ''), 'Sin centro') AS nombre, COUNT(*) AS value
-         FROM ${EXPEDIENTES_SOURCE}
-         GROUP BY COALESCE(NULLIF(LTRIM(RTRIM([Centro Judicial])), ''), 'Sin centro')
-         ORDER BY COUNT(*) DESC, nombre ASC`
+      consultar<{ nombre: unknown; value: unknown }>(
+        `SELECT ${CENTRO} AS nombre, COUNT(*) AS value
+           FROM ${FUENTE}
+          GROUP BY ${CENTRO}
+          ORDER BY COUNT(*) DESC, nombre ASC
+          LIMIT 6`
       ),
-      query<{ nombre: string; value: number }>(
-        `SELECT TOP 6 COALESCE(NULLIF(LTRIM(RTRIM([Unidad Judicial])), ''), 'Sin unidad') AS nombre, COUNT(*) AS value
-         FROM ${EXPEDIENTES_SOURCE}
-         GROUP BY COALESCE(NULLIF(LTRIM(RTRIM([Unidad Judicial])), ''), 'Sin unidad')
-         ORDER BY COUNT(*) DESC, nombre ASC`
+      consultar<{ nombre: unknown; value: unknown }>(
+        `SELECT ${UNIDAD} AS nombre, COUNT(*) AS value
+           FROM ${FUENTE}
+          GROUP BY ${UNIDAD}
+          ORDER BY COUNT(*) DESC, nombre ASC
+          LIMIT 6`
       ),
     ]);
 
-    const estadoResumen = await query<{ activo: number; inactivo: number }>(
+    const resumen = await consultarUno<{ activo: unknown; inactivo: unknown }>(
       `SELECT
-         SUM(CASE WHEN UPPER(LTRIM(RTRIM([Estado]))) IN ('ACTIVO', 'ACT', 'A', 'SI', '1', 'TRUE') THEN 1 ELSE 0 END) AS activo,
-         SUM(CASE WHEN UPPER(LTRIM(RTRIM([Estado]))) IN ('INACTIVO', 'INA', 'I', 'NO', '0', 'FALSE') THEN 1 ELSE 0 END) AS inactivo
-       FROM ${EXPEDIENTES_SOURCE}`
+         COUNT(*) FILTER (WHERE UPPER(TRIM(COALESCE(actualizado, ''))) IN ('ACTIVO', 'ACT', 'A', 'SI', '1', 'TRUE')) AS activo,
+         COUNT(*) FILTER (WHERE UPPER(TRIM(COALESCE(actualizado, ''))) IN ('INACTIVO', 'INA', 'I', 'NO', '0', 'FALSE')) AS inactivo
+       FROM ${FUENTE}`
     );
 
-    const porMesMap = new Map(porMesRaw.map((r) => [r.mes, r.total]));
+    const porMesMap = new Map(porMesRaw.map((r) => [r.mes, num(r.total)]));
     const porMes = ultimosMeses(12).map((mes) => ({ mes, total: porMesMap.get(mes) || 0 }));
 
     return NextResponse.json({
-      estados,
-      documentos,
+      estados: puntos(estados),
+      documentos: puntos(documentos),
       porMes,
-      centros,
-      unidades,
-      estadoResumen: estadoResumen[0] ?? { activo: 0, inactivo: 0 },
+      centros: puntos(centros),
+      unidades: puntos(unidades),
+      estadoResumen: { activo: num(resumen?.activo ?? 0), inactivo: num(resumen?.inactivo ?? 0) },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+  } catch (err) {
+    return respuestaDeError("expedientes/charts", err);
   }
 }

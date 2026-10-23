@@ -79,6 +79,7 @@ export default function ExpedientesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Row | null>(null);
+  const [movimientos, setMovimientos] = useState<Row[]>([]);
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [charts, setCharts] = useState<ChartData | null>(null);
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({
@@ -146,14 +147,15 @@ export default function ExpedientesPage() {
     const params = new URLSearchParams();
     if (centro) params.set("centro", centro);
     if (unidad) params.set("unidad", unidad);
-    const { data, error } = await api<Row>(
+    const { data, error } = await api<{ expediente: Row; movimientos: Row[] }>(
       `/api/expedientes/${encodeURIComponent(row["Expdte"])}?${params}`
     );
     if (error || !data) {
       setError(error || "No se pudo cargar el detalle");
       return;
     }
-    setDetalle(data);
+    setDetalle(data.expediente);
+    setMovimientos(data.movimientos ?? []);
   }
 
   function aplicarFiltro(k: string, v: string) {
@@ -217,7 +219,8 @@ export default function ExpedientesPage() {
                 setPage(1);
               }}
             >
-              Base (goolge2)
+              {/* era "Base (goolge2)", la vista de SQL Server que ya no existe */}
+              Padrón de expedientes
             </button>
             <button
               className={`tab ${source === "cargados" ? "active" : ""}`}
@@ -372,7 +375,17 @@ export default function ExpedientesPage() {
                 <tbody>
                   {rows.map((row, i) => (
                     <tr key={i}>
-                      <td className="mono">{row["Expdte"] ?? ""}</td>
+                      <td className="mono">
+                        {/* El drawer muestra los últimos movimientos; la ficha es la
+                            vista completa (historial + consultas al PJud), server-rendered. */}
+                        {row["Id"] ? (
+                          <Link href={`/expedientes/${row["Id"]}`}>
+                            {row["Expdte"] ?? ""}
+                          </Link>
+                        ) : (
+                          String(row["Expdte"] ?? "")
+                        )}
+                      </td>
                       <td>{row["Actor"] ?? ""}</td>
                       <td>{row["Demandado"] ?? ""}</td>
                       <td>
@@ -509,8 +522,25 @@ export default function ExpedientesPage() {
                     ],
                     ["Descripción", detalle["Descripcion"] || "—"],
                     [
-                      "Historia (XML)",
-                      detalle["Historia"] ? <pre className="xml-pre">{detalle["Historia"]}</pre> : "—",
+                      "Historia",
+                      movimientos.length > 0 ? (
+                        <div className="xml-pre">
+                          {movimientos.map((m, i) => (
+                            <div key={m.id ?? i} style={{ marginBottom: 8 }}>
+                              <b>{m.fecha || "—"}</b>
+                              {m.descripcion ? ` — ${m.descripcion}` : ""}
+                              {m.texto ? <div>{m.texto}</div> : null}
+                              {m.link ? (
+                                <a href={docHref(String(m.link))} target="_blank" rel="noreferrer">
+                                  Ver documento
+                                </a>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="muted">Sin historia</span>
+                      ),
                     ],
                   ].map(([label, value]) => (
                     <div className="field" key={String(label)}>

@@ -1,8 +1,15 @@
 node_modules/
 .next/
+dist/
 out/
+coverage/
 .env
+.env.local
+.env.*.local
 *.log
 .git/
 tsconfig.tsbuildinfo
 next-env.d.ts
+
+# `uploads/` no existe en este proyecto (no se guardan archivos), pero si alguna
+# vez se agrega, va acá y en .dockerignore.

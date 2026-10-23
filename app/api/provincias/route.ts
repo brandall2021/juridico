@@ -1,20 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query, execute } from "@/lib/db";
+import { consultar, ejecutar, num } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { conflicto, esViolacionDeUnicidad, respuestaDeError } from "@/lib/rutas";
 
 export const runtime = "nodejs";
 
+export type Provincia = { id: string; nombre: string };
+
+/**
+ * Maestro de provincias (antes `dbo.Provincias` con `ProvinciaId` char paddeado).
+ * Ahora es `provincias` con `id GENERATED ALWAYS AS IDENTITY` y `nombre UNIQUE`.
+ *
+ * `id` se devuelve como texto porque `app/provincias/page.tsx` (y el `<select>` de
+ * `app/centros/page.tsx`) lo tratan como string: hacen `p.id.trim()` y lo comparan
+ * con el `provinciaId` del centro.
+ */
 export async function GET(req: NextRequest) {
   const { response } = requireAuth(req);
   if (response) return response;
 
   try {
-    const rows = await query(
-      "SELECT RTRIM(ProvinciaId) AS id, RTRIM(ProvinciaNombre) AS nombre FROM dbo.Provincias ORDER BY ProvinciaId"
+    const provincias = await consultar<Provincia>(
+      "SELECT id::text AS id, nombre FROM provincias ORDER BY id"
     );
-    return NextResponse.json({ provincias: rows });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    return NextResponse.json({ provincias });
+  } catch (err) {
+    return respuestaDeError("provincias", err);
   }
 }
 
@@ -33,18 +44,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El nombre supera 40 caracteres" }, { status: 400 });
     }
 
-    const mx = await query<{ m: number }>(
-      "SELECT ISNULL(MAX(CAST(RTRIM(ProvinciaId) AS INT)),0) AS m FROM dbo.Provincias"
-    );
-    const newId = String((Number(mx[0]?.m ?? 0) + 1)).padEnd(4, " ");
-
-    const result = await execute(
-      "INSERT INTO dbo.Provincias (ProvinciaId, ProvinciaNombre) VALUES (@id, @nombre)",
-      { id: newId, nombre }
+    // Antes: SELECT MAX(id)+1 y un INSERT con el id paddeado a 4 (carrera entre dos
+    // usuarios). La base asigna la clave y `RETURNING` la trae.
+    const creado = await ejecutar(
+      "INSERT INTO provincias (nombre) VALUES ($1) RETURNING id",
+      [nombre]
     );
 
-    return NextResponse.json({ ok: true, id: newId.trim() }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    return NextResponse.json({ ok: true, id: num(creado.rows[0]?.id) }, { status: 201 });
+  } catch (err) {
+    // `provincias.nombre` es UNIQUE: dos "Tucumán" no pueden coexistir.
+    if (esViolacionDeUnicidad(err)) {
+      return conflicto("provincias", err, "Ya existe una provincia con ese nombre");
+    }
+    return respuestaDeError("provincias", err);
   }
 }
